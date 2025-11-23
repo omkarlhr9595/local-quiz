@@ -74,6 +74,44 @@ export const quizService = {
       } as Quiz;
     });
   },
+
+  /**
+   * Update an existing quiz
+   */
+  async updateQuiz(
+    quizId: string,
+    updates: Omit<Quiz, "id" | "createdAt">
+  ): Promise<Quiz> {
+    const quizRef = db.collection("quizzes").doc(quizId);
+    const quizDoc = await quizRef.get();
+
+    if (!quizDoc.exists) {
+      throw new Error("Quiz not found");
+    }
+
+    // Get existing createdAt
+    const existingData = quizDoc.data();
+    let createdAt: Date;
+    if (existingData?.createdAt?.toDate) {
+      createdAt = existingData.createdAt.toDate();
+    } else if (typeof existingData?.createdAt === "string") {
+      createdAt = new Date(existingData.createdAt);
+    } else {
+      createdAt = new Date();
+    }
+
+    // Update quiz (preserve createdAt)
+    await quizRef.update({
+      name: updates.name,
+      categories: updates.categories,
+    });
+
+    return {
+      ...updates,
+      id: quizId,
+      createdAt,
+    } as Quiz;
+  },
 };
 
 // Game Service
@@ -130,6 +168,44 @@ export const gameService = {
       createdAt: parseDate(data?.createdAt),
       updatedAt: parseDate(data?.updatedAt),
     } as Game;
+  },
+
+  /**
+   * Get all games (optionally filtered by quizId)
+   */
+  async getAllGames(quizId?: string): Promise<Game[]> {
+    // Fetch all games and filter/sort in memory to avoid requiring a composite index
+    const snapshot = await db.collection("games").get();
+    
+    const parseDate = (dateValue: any): Date => {
+      if (dateValue?.toDate) {
+        return dateValue.toDate();
+      } else if (typeof dateValue === "string") {
+        return new Date(dateValue);
+      } else {
+        return new Date();
+      }
+    };
+
+    let games = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        ...data,
+        id: doc.id,
+        createdAt: parseDate(data?.createdAt),
+        updatedAt: parseDate(data?.updatedAt),
+      } as Game;
+    });
+
+    // Filter by quizId if provided
+    if (quizId) {
+      games = games.filter((game) => game.quizId === quizId);
+    }
+
+    // Sort by createdAt descending
+    games.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    return games;
   },
 
   /**
@@ -268,6 +344,20 @@ export const contestantService = {
 
     const newScore = Math.max(0, contestant.score + points); // No negative scores
     return this.updateContestant(contestantId, { score: newScore });
+  },
+
+  /**
+   * Delete contestant
+   */
+  async deleteContestant(contestantId: string): Promise<void> {
+    const contestantRef = db.collection("contestants").doc(contestantId);
+    const doc = await contestantRef.get();
+    
+    if (!doc.exists) {
+      throw new Error("Contestant not found");
+    }
+
+    await contestantRef.delete();
   },
 };
 

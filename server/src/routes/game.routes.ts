@@ -39,6 +39,26 @@ router.post("/", async (req, res) => {
 });
 
 /**
+ * GET /api/games
+ * Get all games (optionally filtered by quizId query param)
+ */
+router.get("/", async (req, res) => {
+  try {
+    const { quizId } = req.query;
+    const games = await gameService.getAllGames(
+      quizId ? String(quizId) : undefined
+    );
+    res.json({ success: true, data: games } as ApiResponse<typeof games>);
+  } catch (error) {
+    console.error("Error getting games:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get games",
+    } as ApiResponse<null>);
+  }
+});
+
+/**
  * GET /api/games/:id
  * Get game by ID
  */

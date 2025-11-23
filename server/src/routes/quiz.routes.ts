@@ -75,5 +75,40 @@ router.get("/", async (_req, res) => {
   }
 });
 
+/**
+ * PUT /api/quizzes/:id
+ * Update an existing quiz
+ */
+router.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, categories } = req.body;
+
+    if (!name || !categories || !Array.isArray(categories)) {
+      res.status(400).json({
+        success: false,
+        error: "Missing required fields: name and categories",
+      } as ApiResponse<null>);
+      return;
+    }
+
+    const quiz = await quizService.updateQuiz(id, { name, categories });
+    res.json({ success: true, data: quiz } as ApiResponse<typeof quiz>);
+  } catch (error) {
+    console.error("Error updating quiz:", error);
+    if (error instanceof Error && error.message === "Quiz not found") {
+      res.status(404).json({
+        success: false,
+        error: "Quiz not found",
+      } as ApiResponse<null>);
+      return;
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to update quiz",
+    } as ApiResponse<null>);
+  }
+});
+
 export default router;
 

@@ -1,35 +1,31 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import HostGamePage from "./pages/HostPage";
+import QuizSetupPage from "./pages/QuizSetupPage";
+import GameSetupPage from "./pages/GameSetupPage";
+import MainPage from "./pages/MainPage";
+import ContestantPage from "./pages/ContestantPage";
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <BrowserRouter>
+      <Routes>
+        {/* Host Pages */}
+        <Route path="/host/quizzes" element={<QuizSetupPage />} />
+        <Route path="/host/setup" element={<GameSetupPage />} />
+        <Route path="/host/game" element={<HostGamePage />} />
+        <Route path="/host" element={<QuizSetupPage />} />
+        
+        {/* Other Pages */}
+        <Route path="/main" element={<MainPage />} />
+        <Route path="/contestant1" element={<ContestantPage contestantNumber={1} />} />
+        <Route path="/contestant2" element={<ContestantPage contestantNumber={2} />} />
+        <Route path="/contestant3" element={<ContestantPage contestantNumber={3} />} />
+        <Route path="/contestant4" element={<ContestantPage contestantNumber={4} />} />
+        <Route path="/contestant5" element={<ContestantPage contestantNumber={5} />} />
+        <Route path="/" element={<div className="p-8">Select a route: /host/quizzes, /host/contestants, /host/game, /main, /contestant1-5</div>} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;

@@ -128,6 +128,30 @@ export const setupSocketIO = (io: Server) => {
       await handleGameReset(socket, payload.gameId);
     });
 
+    // Main Monitor Controls
+    socket.on("main-monitor-view", async (payload) => {
+      const { gameId, role } = socket.data;
+      if (!gameId || role !== "host") {
+        socket.emit("error", { message: "Only host can control main monitor" });
+        return;
+      }
+
+      // Broadcast view change to all clients in the room
+      io.to(gameId).emit("main-monitor-view", { view: payload.view });
+    });
+
+    socket.on("main-monitor-sound", async (payload) => {
+      const { gameId, role } = socket.data;
+      if (!gameId || role !== "host") {
+        socket.emit("error", { message: "Only host can control main monitor" });
+        return;
+      }
+
+      // Broadcast sound setting to all clients in the room
+      // This could be used to mute/unmute sounds on the main monitor
+      io.to(gameId).emit("main-monitor-sound", { muted: payload.muted });
+    });
+
     // Disconnect
     socket.on("disconnect", async () => {
       await handleLeaveRoom(socket);
