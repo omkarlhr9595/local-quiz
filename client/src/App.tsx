@@ -22,7 +22,7 @@ function App() {
         <Route path="/contestant3" element={<ContestantPage contestantNumber={3} />} />
         <Route path="/contestant4" element={<ContestantPage contestantNumber={4} />} />
         <Route path="/contestant5" element={<ContestantPage contestantNumber={5} />} />
-        <Route path="/" element={<div className="p-8">Select a route: /host/quizzes, /host/contestants, /host/game, /main, /contestant1-5</div>} />
+        <Route path="/" element={<div className="p-8">Select a route: /host/quizzes, /host/setup, /host/game, /main, /contestant1-5</div>} />
       </Routes>
     </BrowserRouter>
   );

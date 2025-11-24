@@ -1,6 +1,22 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+// Get the backend URL - use environment variable if set, otherwise detect from current hostname
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // In development, use current hostname (works for local network access)
+  if (import.meta.env.DEV) {
+    const hostname = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    return `http://${hostname}:3001/api`;
+  }
+  
+  // Production fallback
+  return "http://localhost:3001/api";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -25,9 +41,12 @@ export const gameApi = {
   getAll: (quizId?: string) =>
     api.get("/games", { params: quizId ? { quizId } : {} }),
   getById: (id: string) => api.get(`/games/${id}`),
+  getActive: () => api.get("/games/active"),
+  activate: (id: string) => api.put(`/games/${id}/activate`),
   pause: (id: string, paused: boolean) =>
     api.put(`/games/${id}/pause`, { paused }),
   reset: (id: string) => api.put(`/games/${id}/reset`),
+  delete: (id: string) => api.delete(`/games/${id}`),
 };
 
 // Contestant API

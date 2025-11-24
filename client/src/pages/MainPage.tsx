@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useGameStore } from "@/store/gameStore";
 import { useSocketStore } from "@/store/socketStore";
 import { gameApi, quizApi, contestantApi } from "@/lib/api";
@@ -17,9 +16,6 @@ interface PhotoDisplayData {
 }
 
 function MainPage() {
-  const [searchParams] = useSearchParams();
-  const gameIdFromUrl = searchParams.get("gameId");
-
   const [view, setView] = useState<MonitorView>("grid");
   const [photoDisplay, setPhotoDisplay] = useState<PhotoDisplayData | null>(null);
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set());
@@ -39,12 +35,10 @@ function MainPage() {
 
   const { socket, connect, joinRoom } = useSocketStore();
 
-  // Load game and quiz data
+  // Load active game data
   useEffect(() => {
-    if (gameIdFromUrl) {
-      loadGameData(gameIdFromUrl);
-    }
-  }, [gameIdFromUrl]);
+    loadGameData();
+  }, []);
 
   // Connect to Socket.io
   useEffect(() => {
@@ -53,12 +47,12 @@ function MainPage() {
     }
   }, [socket, connect]);
 
-  // Join room when socket and gameId are ready
+  // Join room when socket and game are ready
   useEffect(() => {
-    if (socket && gameIdFromUrl && game) {
-      joinRoom(gameIdFromUrl, "contestant"); // Main monitor acts as a spectator
+    if (socket && game) {
+      joinRoom(game.id, "contestant"); // Main monitor acts as a spectator
     }
-  }, [socket, gameIdFromUrl, game, joinRoom]);
+  }, [socket, game, joinRoom]);
 
   // Listen to Socket.io events
   useEffect(() => {
@@ -151,10 +145,10 @@ function MainPage() {
     };
   }, [socket, contestants, currentQuestion, setCurrentQuestion, setLeaderboard, setContestants]);
 
-  const loadGameData = async (gameId: string) => {
+  const loadGameData = async () => {
     try {
-      // Load game
-      const gameResponse = await gameApi.getById(gameId);
+      // Load active game
+      const gameResponse = await gameApi.getActive();
       if (gameResponse.data.success) {
         const gameData = gameResponse.data.data;
         setGame(gameData);
@@ -168,7 +162,7 @@ function MainPage() {
         }
 
         // Load contestants
-        const contestantsResponse = await contestantApi.getByGameId(gameId);
+        const contestantsResponse = await contestantApi.getByGameId(gameData.id);
         if (contestantsResponse.data.success) {
           setContestants(contestantsResponse.data.data);
         }
@@ -187,19 +181,6 @@ function MainPage() {
     const questionKey = `${category.name}-${question.points}`;
     return answeredQuestions.has(questionKey);
   };
-
-  if (!gameIdFromUrl) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">Main Monitor</h1>
-          <p className="text-gray-400 text-xl">
-            Please provide a gameId in the URL: /main?gameId=YOUR_GAME_ID
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   if (!quiz || !game) {
     return (

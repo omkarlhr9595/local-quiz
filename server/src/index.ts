@@ -57,10 +57,17 @@ import { setupSocketIO } from "./socket/index.js";
   const httpServer = createServer(app);
 
   const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+  const NODE_ENV = process.env.NODE_ENV || "development";
+
+  // In development, allow all origins for local network access
+  // In production, use the specific CLIENT_URL
+  const corsOrigin = NODE_ENV === "development" 
+    ? true // Allow all origins in development (for local network access)
+    : CLIENT_URL;
 
   const io = new Server(httpServer, {
     cors: {
-      origin: CLIENT_URL,
+      origin: corsOrigin,
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -68,7 +75,7 @@ import { setupSocketIO } from "./socket/index.js";
 
   app.use(
     cors({
-      origin: CLIENT_URL,
+      origin: corsOrigin,
       credentials: true,
     })
   );

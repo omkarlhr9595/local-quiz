@@ -209,6 +209,51 @@ export const gameService = {
   },
 
   /**
+   * Get active game (game with status "active")
+   */
+  async getActiveGame(): Promise<Game | null> {
+    const games = await this.getAllGames();
+    
+    // Filter for active games, sort by createdAt descending
+    const activeGames = games
+      .filter((game) => game.status === "active")
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
+    // Return the most recent active game
+    return activeGames.length > 0 ? activeGames[0] : null;
+  },
+
+  /**
+   * Activate a game (sets it to active and deactivates all others)
+   */
+  async activateGame(gameId: string): Promise<Game> {
+    // Get all games
+    const allGames = await this.getAllGames();
+    
+    // Set all games to "waiting" except the one being activated
+    const updatePromises = allGames.map((game) => {
+      if (game.id === gameId) {
+        // Activate this game
+        return this.updateGame(gameId, { status: "active" });
+      } else if (game.status === "active") {
+        // Deactivate other active games
+        return this.updateGame(game.id, { status: "waiting" });
+      }
+      return Promise.resolve(game);
+    });
+    
+    await Promise.all(updatePromises);
+    
+    // Return the activated game
+    const activatedGame = await this.getGameById(gameId);
+    if (!activatedGame) {
+      throw new Error("Game not found after activation");
+    }
+    
+    return activatedGame;
+  },
+
+  /**
    * Update game
    */
   async updateGame(gameId: string, updates: Partial<Game>): Promise<Game> {
@@ -226,6 +271,30 @@ export const gameService = {
     }
 
     return updatedGame;
+  },
+
+  /**
+   * Delete game
+   */
+  async deleteGame(gameId: string): Promise<void> {
+    const gameRef = db.collection("games").doc(gameId);
+    const gameDoc = await gameRef.get();
+    
+    if (!gameDoc.exists) {
+      throw new Error("Game not found");
+    }
+
+    // Delete all contestants associated with this game
+    const contestantsSnapshot = await db
+      .collection("contestants")
+      .where("gameId", "==", gameId)
+      .get();
+    
+    const deleteContestantPromises = contestantsSnapshot.docs.map((doc) => doc.ref.delete());
+    await Promise.all(deleteContestantPromises);
+
+    // Delete the game
+    await gameRef.delete();
   },
 };
 

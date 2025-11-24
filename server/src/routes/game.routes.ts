@@ -59,6 +59,30 @@ router.get("/", async (req, res) => {
 });
 
 /**
+ * GET /api/games/active
+ * Get the currently active game
+ */
+router.get("/active", async (_req, res) => {
+  try {
+    const game = await gameService.getActiveGame();
+    if (!game) {
+      res.status(404).json({
+        success: false,
+        error: "No active game found",
+      } as ApiResponse<null>);
+      return;
+    }
+    res.json({ success: true, data: game } as ApiResponse<typeof game>);
+  } catch (error) {
+    console.error("Error getting active game:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get active game",
+    } as ApiResponse<null>);
+  }
+});
+
+/**
  * GET /api/games/:id
  * Get game by ID
  */
@@ -135,6 +159,52 @@ router.put("/:id/reset", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to reset game",
+    } as ApiResponse<null>);
+  }
+});
+
+/**
+ * PUT /api/games/:id/activate
+ * Activate a game (deactivates all other games)
+ */
+router.put("/:id/activate", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const game = await gameService.activateGame(id);
+
+    res.json({ success: true, data: game } as ApiResponse<typeof game>);
+  } catch (error) {
+    console.error("Error activating game:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to activate game",
+    } as ApiResponse<null>);
+  }
+});
+
+/**
+ * DELETE /api/games/:id
+ * Delete a game and all associated contestants
+ */
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await gameService.deleteGame(id);
+
+    return res.json({ success: true, data: null } as ApiResponse<null>);
+  } catch (error) {
+    console.error("Error deleting game:", error);
+    if (error instanceof Error && error.message === "Game not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Game not found",
+      } as ApiResponse<null>);
+    }
+    return res.status(500).json({
+      success: false,
+      error: "Failed to delete game",
     } as ApiResponse<null>);
   }
 });

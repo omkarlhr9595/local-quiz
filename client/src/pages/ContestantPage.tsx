@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useGameStore } from "@/store/gameStore";
 import { useSocketStore } from "@/store/socketStore";
-import { contestantApi } from "@/lib/api";
+import { contestantApi, gameApi } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -12,8 +11,6 @@ interface ContestantPageProps {
 }
 
 function ContestantPage({ contestantNumber }: ContestantPageProps) {
-  const [searchParams] = useSearchParams();
-  const gameIdFromUrl = searchParams.get("gameId");
   const route = `/contestant${contestantNumber}`;
 
   const [contestant, setContestant] = useState<any>(null);
@@ -22,20 +19,27 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
   const [buzzerDisabled, setBuzzerDisabled] = useState(false);
 
   const {
+    game,
     currentQuestion,
     buzzerQueue,
+    setGame,
     setCurrentQuestion,
     setBuzzerQueue,
   } = useGameStore();
 
   const { socket, connect, joinRoom } = useSocketStore();
 
-  // Load contestant data
+  // Load active game
   useEffect(() => {
-    if (gameIdFromUrl) {
+    loadActiveGame();
+  }, []);
+
+  // Load contestant data when game is loaded
+  useEffect(() => {
+    if (game) {
       loadContestant();
     }
-  }, [gameIdFromUrl, route]);
+  }, [game, route]);
 
   // Connect to Socket.io
   useEffect(() => {
@@ -44,12 +48,12 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
     }
   }, [socket, connect]);
 
-  // Join room when socket and contestant are ready
+  // Join room when socket, game, and contestant are ready
   useEffect(() => {
-    if (socket && gameIdFromUrl && contestant) {
-      joinRoom(gameIdFromUrl, "contestant", contestant.id);
+    if (socket && game && contestant) {
+      joinRoom(game.id, "contestant", contestant.id);
     }
-  }, [socket, gameIdFromUrl, contestant, joinRoom]);
+  }, [socket, game, contestant, joinRoom]);
 
   // Listen to Socket.io events
   useEffect(() => {
@@ -117,7 +121,7 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
 
   // Handle spacebar press for buzzer
   const handleBuzzerPress = useCallback(() => {
-    if (!socket || !gameIdFromUrl || !contestant || buzzerDisabled) {
+    if (!socket || !game || !contestant || buzzerDisabled) {
       return;
     }
 
@@ -128,7 +132,7 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
 
     const timestamp = Date.now();
     socket.emit("buzzer-press", {
-      gameId: gameIdFromUrl,
+      gameId: game.id,
       contestantId: contestant.id,
       timestamp,
     });
@@ -140,7 +144,7 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
         setBuzzerDisabled(false);
       }
     }, 100);
-  }, [socket, gameIdFromUrl, contestant, buzzerDisabled, isInQueue]);
+  }, [socket, game, contestant, buzzerDisabled, isInQueue]);
 
   // Listen for spacebar keypress
   useEffect(() => {
@@ -157,12 +161,23 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
     };
   }, [currentQuestion, buzzerDisabled, handleBuzzerPress]);
 
+  const loadActiveGame = async () => {
+    try {
+      const gameResponse = await gameApi.getActive();
+      if (gameResponse.data.success) {
+        setGame(gameResponse.data.data);
+      }
+    } catch (error) {
+      console.error("Error loading active game:", error);
+    }
+  };
+
   const loadContestant = async () => {
-    if (!gameIdFromUrl) return;
+    if (!game) return;
 
     try {
       // Load all contestants for the game
-      const response = await contestantApi.getByGameId(gameIdFromUrl);
+      const response = await contestantApi.getByGameId(game.id);
       if (response.data.success) {
         const contestants = response.data.data;
         // Find contestant by route
@@ -178,16 +193,13 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
     }
   };
 
-  if (!gameIdFromUrl) {
+  if (!game) {
     return (
       <div className="min-h-screen bg-blue-50 flex items-center justify-center p-8">
         <Card className="p-8 max-w-md w-full text-center">
           <h1 className="text-3xl font-bold mb-4">Contestant {contestantNumber}</h1>
           <p className="text-gray-600 mb-4">
-            Please provide a gameId in the URL:
-          </p>
-          <p className="text-sm text-gray-500 font-mono">
-            /contestant{contestantNumber}?gameId=YOUR_GAME_ID
+            No active game found. Please start a game from the host panel.
           </p>
         </Card>
       </div>

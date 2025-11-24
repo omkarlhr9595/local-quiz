@@ -369,7 +369,7 @@ export default function GameSetupPage() {
     }
 
     // Navigate to game control
-    navigate(`/host/game?gameId=${gameId}`);
+    navigate(`/host/game`);
   };
 
   return (
