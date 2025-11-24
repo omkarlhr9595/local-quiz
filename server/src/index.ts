@@ -81,7 +81,31 @@ import { setupSocketIO } from "./socket/index.js";
   );
   app.use(express.json());
 
-  const PORT = process.env.PORT || 3001;
+  // Serve static files from uploads directory
+  // This makes images accessible from other devices on the local network
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const uploadsPath = join(__dirname, "../uploads");
+  
+  // Serve uploads directory as static files
+  app.use("/uploads", express.static(uploadsPath, {
+    // Set proper headers for images
+    setHeaders: (res, filePath) => {
+      // Allow CORS for images so they can be accessed from other devices
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET");
+      
+      // Cache images for better performance
+      if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg") || 
+          filePath.endsWith(".png") || filePath.endsWith(".gif") || 
+          filePath.endsWith(".webp")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000");
+      }
+    },
+  }));
+
+  const PORT = Number(process.env.PORT) || 3001;
+  const HOST = process.env.HOST || "0.0.0.0"; // 0.0.0.0 allows access from all network interfaces
 
   // REST API routes
   app.use("/api", apiRoutes);
@@ -89,8 +113,18 @@ import { setupSocketIO } from "./socket/index.js";
   // Setup Socket.io handlers
   setupSocketIO(io);
 
-  httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  httpServer.listen(PORT, HOST, () => {
+    const displayHost = HOST === "0.0.0.0" ? "localhost" : HOST;
+    console.log(`🚀 Server running on http://${displayHost}:${PORT}`);
+    console.log(`📁 Serving uploads from: ${uploadsPath}`);
+    
+    // In development, show helpful network access info
+    if (NODE_ENV === "development") {
+      console.log(`\n💡 To access from other devices on your local network:`);
+      console.log(`   1. Find your machine's IP address (e.g., 192.168.1.100)`);
+      console.log(`   2. Set PUBLIC_URL environment variable: PUBLIC_URL=http://192.168.1.100:${PORT}`);
+      console.log(`   3. This ensures image URLs work correctly on all devices\n`);
+    }
   });
 })();
 

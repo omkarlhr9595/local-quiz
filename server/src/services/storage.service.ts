@@ -1,5 +1,32 @@
-import { storage } from "../config/firebase.js";
+import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Get the uploads directory path (server/uploads)
+const getUploadsDir = () => {
+  return path.join(__dirname, "../../uploads");
+};
+
+// Get the base URL for serving images
+const getBaseUrl = (): string => {
+  // Use PUBLIC_URL if set (allows users to specify their IP for local network access)
+  // Format: http://192.168.1.100:3001 or http://localhost:3001
+  if (process.env.PUBLIC_URL) {
+    return process.env.PUBLIC_URL;
+  }
+  
+  const PORT = process.env.PORT || 3001;
+  const hostname = process.env.HOST || "localhost";
+  
+  // If HOST is 0.0.0.0, use localhost (0.0.0.0 can't be used in URLs)
+  const urlHost = hostname === "0.0.0.0" ? "localhost" : hostname;
+  
+  return `http://${urlHost}:${PORT}`;
+};
 
 interface UploadPhotoParams {
   file: Express.Multer.File;
@@ -8,7 +35,7 @@ interface UploadPhotoParams {
 }
 
 /**
- * Upload contestant photo to Firebase Storage
+ * Upload contestant photo to local storage
  * @param params - Upload parameters
  * @returns Public URL of uploaded photo
  */
@@ -18,56 +45,84 @@ export const uploadContestantPhoto = async ({
   contestantId,
 }: UploadPhotoParams): Promise<string> => {
   try {
-    const bucket = storage.bucket();
     const fileExtension = path.extname(file.originalname);
-    const fileName = `contestants/${gameId}/${contestantId}/photo${fileExtension}`;
+    const uploadsDir = getUploadsDir();
+    const gameDir = path.join(uploadsDir, "contestants", gameId);
+    const contestantDir = path.join(gameDir, contestantId);
+    const fileName = `photo${fileExtension}`;
+    const filePath = path.join(contestantDir, fileName);
 
-    const fileRef = bucket.file(fileName);
+    console.log(`📁 Upload directory: ${uploadsDir}`);
+    console.log(`📁 Full file path: ${filePath}`);
 
-    // Upload file
-    await fileRef.save(file.buffer, {
-      metadata: {
-        contentType: file.mimetype,
-        metadata: {
-          gameId,
-          contestantId,
-          uploadedAt: new Date().toISOString(),
-        },
-      },
-    });
+    // Create directories if they don't exist
+    await fs.mkdir(contestantDir, { recursive: true });
+    console.log(`✅ Created directory: ${contestantDir}`);
 
-    // Make file publicly accessible
-    await fileRef.makePublic();
+    // Write file to disk
+    await fs.writeFile(filePath, file.buffer);
+    console.log(`✅ File written: ${filePath} (${file.size} bytes)`);
 
-    // Get public URL
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    // Verify file was written
+    const stats = await fs.stat(filePath);
+    console.log(`✅ File verified: ${stats.size} bytes on disk`);
+
+    // Generate public URL
+    const baseUrl = getBaseUrl();
+    const publicUrl = `${baseUrl}/uploads/contestants/${gameId}/${contestantId}/${fileName}`;
+
+    console.log(`✅ Photo uploaded successfully`);
+    console.log(`   File path: ${filePath}`);
+    console.log(`   Public URL: ${publicUrl}`);
 
     return publicUrl;
   } catch (error) {
-    console.error("Error uploading photo to Firebase Storage:", error);
-    throw new Error("Failed to upload photo");
+    console.error("❌ Error uploading photo to local storage:", error);
+    if (error instanceof Error) {
+      console.error("   Error message:", error.message);
+      console.error("   Error stack:", error.stack);
+    }
+    throw new Error(`Failed to upload photo: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
 };
 
 /**
- * Delete contestant photo from Firebase Storage
+ * Delete contestant photo from local storage
  */
 export const deleteContestantPhoto = async (
   gameId: string,
   contestantId: string
 ): Promise<void> => {
   try {
-    const bucket = storage.bucket();
+    const uploadsDir = getUploadsDir();
+    const contestantDir = path.join(uploadsDir, "contestants", gameId, contestantId);
 
-    // Note: Firebase Storage doesn't support wildcards directly
-    // List files and delete them
-    const [files] = await bucket.getFiles({
-      prefix: `contestants/${gameId}/${contestantId}/`,
-    });
+    // Check if directory exists
+    try {
+      await fs.access(contestantDir);
+    } catch {
+      // Directory doesn't exist, nothing to delete
+      return;
+    }
 
-    await Promise.all(files.map((file) => file.delete()));
+    // Read all files in the directory
+    const files = await fs.readdir(contestantDir);
+    
+    // Delete all files in the contestant directory
+    await Promise.all(
+      files.map((file) => fs.unlink(path.join(contestantDir, file)))
+    );
+
+    // Try to remove the directory (will fail if not empty, which is fine)
+    try {
+      await fs.rmdir(contestantDir);
+    } catch {
+      // Directory not empty or other error, ignore
+    }
+
+    console.log(`✅ Deleted photos for contestant: ${contestantId}`);
   } catch (error) {
-    console.error("Error deleting photo from Firebase Storage:", error);
+    console.error("Error deleting photo from local storage:", error);
     throw new Error("Failed to delete photo");
   }
 };

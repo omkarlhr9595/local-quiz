@@ -25,6 +25,17 @@ export const api = axios.create({
   },
 });
 
+// Request interceptor to remove Content-Type for FormData so axios can set it automatically
+api.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    // Remove Content-Type header to let axios set it automatically with boundary
+    if (config.headers) {
+      delete (config.headers as any)["Content-Type"];
+    }
+  }
+  return config;
+});
+
 // Quiz API
 export const quizApi = {
   create: (data: { name: string; categories: any[] }) =>

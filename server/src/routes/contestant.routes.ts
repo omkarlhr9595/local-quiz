@@ -16,6 +16,12 @@ router.post("/", upload.single("photo"), async (req, res) => {
     const { name, gameId, route } = req.body;
     const file = req.file;
 
+    console.log("📤 Received contestant creation request:");
+    console.log("   Name:", name);
+    console.log("   GameId:", gameId);
+    console.log("   Route:", route);
+    console.log("   File:", file ? `${file.originalname} (${file.size} bytes, ${file.mimetype})` : "No file");
+
     if (!name || !gameId || !route) {
       return res.status(400).json({
         success: false,

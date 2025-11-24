@@ -299,13 +299,6 @@ export default function GameSetupPage() {
     }
 
     const contestant = contestants[index];
-    
-    // If contestant already has an ID, we can't update photo yet
-    // TODO: Add photo update endpoint
-    if (contestant.id) {
-      alert("Photo update for existing contestants coming soon. Please remove and re-add the contestant to upload a new photo.");
-      return;
-    }
 
     // Ensure contestant has a name before uploading photo
     if (!contestant.name.trim()) {
@@ -313,8 +306,7 @@ export default function GameSetupPage() {
       return;
     }
 
-    // If contestant doesn't have ID yet, save it first, then upload photo
-    // But actually, we can create with photo in one go
+    // Backend supports both creating new contestants with photos and updating existing ones
     const formData = new FormData();
     formData.append("name", contestant.name);
     formData.append("gameId", gameId);
@@ -322,22 +314,48 @@ export default function GameSetupPage() {
     formData.append("photo", file);
 
     try {
-      console.log("Creating contestant with photo for game:", gameId);
+      const isUpdate = contestant.id ? "updating" : "creating";
+      console.log(`${isUpdate} contestant with photo for game:`, gameId);
+      console.log("File:", file.name, `(${file.size} bytes, ${file.type})`);
+      console.log("Contestant:", contestant);
+      
       const response = await contestantApi.create(formData);
+      console.log("Upload response:", response.data);
+      
       if (response.data.success) {
-        const newContestant = response.data.data;
-        console.log("Contestant created with photo:", newContestant);
+        const updatedContestant = response.data.data;
+        console.log(`✅ Contestant ${isUpdate} with photo:`, updatedContestant);
         const updated = [...contestants];
         updated[index] = {
           ...updated[index],
-          id: newContestant.id,
-          photoUrl: newContestant.photoUrl,
+          id: updatedContestant.id,
+          photoUrl: updatedContestant.photoUrl,
         };
         setContestants(updated);
+        console.log("✅ UI updated with new photo URL:", updatedContestant.photoUrl);
+        
+        // Reset file input so the same file can be selected again
+        const fileInput = fileInputRefs.current[index];
+        if (fileInput) {
+          fileInput.value = "";
+        }
+      } else {
+        console.error("Upload failed:", response.data);
+        alert("Failed to upload photo: " + (response.data.error || "Unknown error"));
+        // Reset file input even on failure
+        const fileInput = fileInputRefs.current[index];
+        if (fileInput) {
+          fileInput.value = "";
+        }
       }
     } catch (error) {
       console.error("Error uploading photo:", error);
-      alert("Failed to upload photo");
+      alert("Failed to upload photo. Check console for details.");
+      // Reset file input on error
+      const fileInput = fileInputRefs.current[index];
+      if (fileInput) {
+        fileInput.value = "";
+      }
     }
   };
 
@@ -590,14 +608,19 @@ export default function GameSetupPage() {
 
                       <div className="space-y-2">
                         <input
+                          key={`file-input-${index}-${contestant.id || 'new'}`}
                           type="file"
                           accept="image/*"
+                          data-index={index}
                           ref={(el) => {
-                            fileInputRefs.current[index] = el;
+                            if (el) {
+                              fileInputRefs.current[index] = el;
+                            }
                           }}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              console.log("File selected:", file.name, `(${file.size} bytes)`, "for contestant index:", index);
                               handlePhotoUpload(index, file);
                             }
                           }}
@@ -606,7 +629,21 @@ export default function GameSetupPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => fileInputRefs.current[index]?.click()}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            const fileInput = fileInputRefs.current[index];
+                            if (fileInput) {
+                              // Reset the input value to ensure onChange fires even if same file is selected
+                              // Do this before clicking to ensure a fresh state
+                              fileInput.value = "";
+                              // Use setTimeout to ensure the reset happens before the click
+                              setTimeout(() => {
+                                fileInput.click();
+                              }, 0);
+                            } else {
+                              console.error("File input ref not found for index:", index);
+                            }
+                          }}
                         >
                           Upload Photo
                         </Button>

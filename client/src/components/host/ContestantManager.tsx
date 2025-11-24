@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { contestantApi } from "@/lib/api";
 import { useGameStore } from "@/store/gameStore";
+import type { Contestant as ContestantType } from "../../../../shared/types/index";
 
 interface Contestant {
   id: string;
@@ -14,7 +15,7 @@ interface Contestant {
 }
 
 export function ContestantManager() {
-  const { game, contestants, setContestants } = useGameStore();
+  const { game, setContestants } = useGameStore();
   const [localContestants, setLocalContestants] = useState<Contestant[]>([]);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
@@ -29,26 +30,57 @@ export function ContestantManager() {
       return;
     }
 
+    // Get the current contestant name or use default
+    const currentContestant = localContestants[contestantNumber - 1];
+    const contestantName = currentContestant?.name || `Contestant ${contestantNumber}`;
+
     const formData = new FormData();
-    formData.append("name", `Contestant ${contestantNumber}`);
+    formData.append("name", contestantName);
     formData.append("gameId", game.id);
     formData.append("route", `/contestant${contestantNumber}`);
     formData.append("photo", file);
 
     try {
+      console.log("Uploading photo for contestant:", contestantNumber, "File:", file.name);
       const response = await contestantApi.create(formData);
+      console.log("Upload response:", response.data);
+      
       if (response.data.success) {
         const newContestant = response.data.data;
+        console.log("Contestant created/updated:", newContestant);
+        
+        // Update local state
         setLocalContestants((prev) => {
           const updated = [...prev];
           updated[contestantNumber - 1] = newContestant;
           return updated;
         });
-        setContestants([...contestants, newContestant]);
+        
+        // Update global contestants - get current state and update
+        const { contestants: currentContestants } = useGameStore.getState();
+        const existingIndex = currentContestants.findIndex((c: ContestantType) => c.id === newContestant.id || c.route === newContestant.route);
+        if (existingIndex >= 0) {
+          // Update existing contestant
+          const updated = [...currentContestants];
+          updated[existingIndex] = newContestant;
+          setContestants(updated);
+        } else {
+          // Add new contestant
+          setContestants([...currentContestants, newContestant]);
+        }
+        
+        // Reset file input so same file can be selected again
+        const fileInput = fileInputRefs.current[contestantNumber];
+        if (fileInput) {
+          fileInput.value = "";
+        }
+      } else {
+        console.error("Upload failed:", response.data);
+        alert("Failed to upload photo: " + (response.data.error || "Unknown error"));
       }
     } catch (error) {
       console.error("Error uploading photo:", error);
-      alert("Failed to upload photo");
+      alert("Failed to upload photo. Check console for details.");
     }
   };
 
