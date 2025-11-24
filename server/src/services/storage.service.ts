@@ -52,37 +52,23 @@ export const uploadContestantPhoto = async ({
     const fileName = `photo${fileExtension}`;
     const filePath = path.join(contestantDir, fileName);
 
-    console.log(`📁 Upload directory: ${uploadsDir}`);
-    console.log(`📁 Full file path: ${filePath}`);
-
     // Create directories if they don't exist
     await fs.mkdir(contestantDir, { recursive: true });
-    console.log(`✅ Created directory: ${contestantDir}`);
 
     // Write file to disk
     await fs.writeFile(filePath, file.buffer);
-    console.log(`✅ File written: ${filePath} (${file.size} bytes)`);
-
-    // Verify file was written
-    const stats = await fs.stat(filePath);
-    console.log(`✅ File verified: ${stats.size} bytes on disk`);
 
     // Generate public URL
     const baseUrl = getBaseUrl();
     const publicUrl = `${baseUrl}/uploads/contestants/${gameId}/${contestantId}/${fileName}`;
 
-    console.log(`✅ Photo uploaded successfully`);
-    console.log(`   File path: ${filePath}`);
+    console.log(`✅ Photo uploaded: ${filePath}`);
     console.log(`   Public URL: ${publicUrl}`);
 
     return publicUrl;
   } catch (error) {
-    console.error("❌ Error uploading photo to local storage:", error);
-    if (error instanceof Error) {
-      console.error("   Error message:", error.message);
-      console.error("   Error stack:", error.stack);
-    }
-    throw new Error(`Failed to upload photo: ${error instanceof Error ? error.message : "Unknown error"}`);
+    console.error("Error uploading photo to local storage:", error);
+    throw new Error("Failed to upload photo");
   }
 };
 

@@ -1,6 +1,6 @@
 import type { Socket } from "socket.io";
 import type { ServerToClientEvents } from "../types.js";
-import { gameService, contestantService, quizService } from "../../services/firestore.service.js";
+import { gameService, contestantService } from "../../services/firestore.service.js";
 
 export const handleHostAnswerConfirm = async (
   socket: Socket<never, ServerToClientEvents>,
@@ -48,11 +48,43 @@ export const handleHostAnswerConfirm = async (
         await broadcastLeaderboard(socket, gameId);
       }
 
+      // Mark question as answered and clear current question
+      const answeredQuestion = game.currentQuestion
+        ? {
+            categoryIndex: game.currentQuestion.categoryIndex,
+            questionIndex: game.currentQuestion.questionIndex,
+          }
+        : null;
+
+      const updatedAnsweredQuestions = answeredQuestion
+        ? [...(game.answeredQuestions || []), answeredQuestion]
+        : game.answeredQuestions || [];
+
       // Clear current question and reset buzzer queue
-      await gameService.updateGame(gameId, {
+      // Keep status as "active" so game can continue
+      const updatedGame = await gameService.updateGame(gameId, {
         currentQuestion: null,
         buzzerQueue: [],
-        status: "waiting",
+        status: "active", // Keep game active so host can select next question
+        answeredQuestions: updatedAnsweredQuestions,
+      });
+
+      // Broadcast game state update so frontend can update the grid
+      socket.to(gameId).emit("game-update", {
+        game: updatedGame,
+      });
+      socket.emit("game-update", {
+        game: updatedGame,
+      });
+
+      // Broadcast queue update to clear buzzer queue on all clients
+      socket.to(gameId).emit("buzzer-queue-update", {
+        queue: [],
+        currentAnswering: null,
+      });
+      socket.emit("buzzer-queue-update", {
+        queue: [],
+        currentAnswering: null,
       });
 
       console.log(

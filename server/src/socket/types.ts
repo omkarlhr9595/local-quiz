@@ -5,6 +5,7 @@ import type {
   BuzzerPressPayload,
   HostAnswerConfirmPayload,
   GameControlPayload,
+  Game,
 } from "../../../shared/types/index.js";
 
 export interface SocketData {
@@ -45,6 +46,8 @@ export interface ServerToClientEvents {
     }>;
   }) => void;
   "game-state-change": (data: { status: string }) => void;
+  "game-update": (data: { game: Game }) => void;
+  "main-monitor-view": (data: { view: "grid" | "question" | "leaderboard" | "photo" }) => void;
   error: (data: { message: string }) => void;
 }
 

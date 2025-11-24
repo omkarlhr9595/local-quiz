@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,9 +15,16 @@ export function QuestionPreview({
   categoryIndex,
   questionIndex,
 }: QuestionPreviewProps) {
-  const { quiz } = useGameStore();
+  const { quiz, currentQuestion } = useGameStore();
   const { socket, gameId } = useSocketStore();
   const [isRevealed, setIsRevealed] = useState(false);
+
+  // Reset isRevealed when:
+  // 1. The selected question changes (different categoryIndex or questionIndex)
+  // 2. The currentQuestion is cleared (becomes null)
+  useEffect(() => {
+    setIsRevealed(false);
+  }, [categoryIndex, questionIndex, currentQuestion]);
 
   if (!quiz) return null;
 

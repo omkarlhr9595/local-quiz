@@ -50,6 +50,7 @@ export interface Game {
   status: GameStatus;
   currentQuestion: CurrentQuestion | null;
   buzzerQueue: BuzzerQueueEntry[];
+  answeredQuestions: Array<{ categoryIndex: number; questionIndex: number }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -140,6 +141,7 @@ export interface ServerToClientEvents {
     }>;
   }) => void;
   "game-state-change": (data: { status: string }) => void;
+  "game-update": (data: { game: Game }) => void;
   "main-monitor-view": (data: { view: "grid" | "question" | "leaderboard" | "photo" }) => void;
   error: (data: { message: string }) => void;
 }

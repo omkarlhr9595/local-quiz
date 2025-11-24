@@ -167,6 +167,7 @@ export const gameService = {
       id: gameDoc.id,
       createdAt: parseDate(data?.createdAt),
       updatedAt: parseDate(data?.updatedAt),
+      answeredQuestions: data?.answeredQuestions || [],
     } as Game;
   },
 
@@ -194,6 +195,7 @@ export const gameService = {
         id: doc.id,
         createdAt: parseDate(data?.createdAt),
         updatedAt: parseDate(data?.updatedAt),
+        answeredQuestions: data?.answeredQuestions || [],
       } as Game;
     });
 

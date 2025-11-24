@@ -91,8 +91,9 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       const first = data.queue.length > 0 && data.queue[0].contestantId === contestant.id;
       setIsFirstInQueue(first);
 
-      // Disable buzzer if already in queue or if someone is answering
-      setBuzzerDisabled(inQueue || data.currentAnswering !== null);
+      // Disable buzzer only if already in queue (not if someone else is answering)
+      // Contestants should be able to join the queue even if someone is answering
+      setBuzzerDisabled(inQueue);
     };
 
     const handleAnswerResult = (data: {
@@ -121,12 +122,12 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
 
   // Handle spacebar press for buzzer
   const handleBuzzerPress = useCallback(() => {
-    if (!socket || !game || !contestant || buzzerDisabled) {
+    if (!socket || !game || !contestant || !currentQuestion) {
       return;
     }
 
-    // Don't allow multiple presses
-    if (isInQueue) {
+    // Don't allow if already disabled or already in queue
+    if (buzzerDisabled || isInQueue) {
       return;
     }
 
@@ -138,13 +139,9 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
     });
 
     // Disable buzzer temporarily to prevent spam
+    // The buzzer-queue-update event will re-enable it if not in queue
     setBuzzerDisabled(true);
-    setTimeout(() => {
-      if (!isInQueue) {
-        setBuzzerDisabled(false);
-      }
-    }, 100);
-  }, [socket, game, contestant, buzzerDisabled, isInQueue]);
+  }, [socket, game, contestant, currentQuestion, buzzerDisabled, isInQueue]);
 
   // Listen for spacebar keypress
   useEffect(() => {
@@ -265,22 +262,6 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
           )}
         </Card>
 
-        {/* Current Question */}
-        {currentQuestion && (
-          <Card className="p-8 mb-6 bg-white">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Badge className="text-lg px-4 py-2">{currentQuestion.category}</Badge>
-                <Badge variant="secondary" className="text-lg px-4 py-2">
-                  {currentQuestion.points} Points
-                </Badge>
-              </div>
-              <div className="text-3xl font-semibold leading-tight">
-                {currentQuestion.question}
-              </div>
-            </div>
-          </Card>
-        )}
 
         {/* Buzzer Instructions */}
         {currentQuestion && !isInQueue && (

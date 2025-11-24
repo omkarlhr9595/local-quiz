@@ -26,6 +26,7 @@ router.post("/", async (req, res) => {
       status: "waiting",
       currentQuestion: null,
       buzzerQueue: [],
+      answeredQuestions: [],
     });
 
     res.status(201).json({ success: true, data: game } as ApiResponse<typeof game>);
@@ -151,6 +152,7 @@ router.put("/:id/reset", async (req, res) => {
       status: "waiting",
       currentQuestion: null,
       buzzerQueue: [],
+      answeredQuestions: [],
     });
 
     res.json({ success: true, data: game } as ApiResponse<typeof game>);

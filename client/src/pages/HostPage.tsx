@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useGameStore } from "@/store/gameStore";
 import { useSocketStore } from "@/store/socketStore";
-import { gameApi, quizApi } from "@/lib/api";
+import { gameApi, quizApi, contestantApi } from "@/lib/api";
 
 function HostGamePage() {
   const navigate = useNavigate();
@@ -54,10 +54,58 @@ function HostGamePage() {
         const gameData = gameResponse.data.data;
         setGame(gameData);
 
-        // Load quiz
-        const quizResponse = await quizApi.getById(gameData.quizId);
-        if (quizResponse.data.success) {
-          setQuiz(quizResponse.data.data);
+        // Restore game state from DB
+        if (gameData.currentQuestion) {
+          // Load quiz to get category name
+          const quizResponse = await quizApi.getById(gameData.quizId);
+          if (quizResponse.data.success) {
+            const quizData = quizResponse.data.data;
+            setQuiz(quizData);
+            
+            const category = quizData.categories[gameData.currentQuestion.categoryIndex];
+            if (category) {
+              setCurrentQuestion({
+                question: gameData.currentQuestion.question,
+                points: gameData.currentQuestion.points,
+                category: category.name,
+              });
+            }
+          }
+        } else {
+          // Load quiz even if no current question
+          const quizResponse = await quizApi.getById(gameData.quizId);
+          if (quizResponse.data.success) {
+            setQuiz(quizResponse.data.data);
+          }
+        }
+
+        // Restore buzzer queue
+        if (gameData.buzzerQueue && gameData.buzzerQueue.length > 0) {
+          const currentAnswering = gameData.buzzerQueue.length > 0 
+            ? gameData.buzzerQueue[0].contestantId 
+            : null;
+          setBuzzerQueue(gameData.buzzerQueue, currentAnswering);
+        }
+
+        // Load contestants and generate leaderboard
+        try {
+          const contestantsResponse = await contestantApi.getByGameId(gameData.id);
+          if (contestantsResponse.data.success) {
+            const contestants = contestantsResponse.data.data;
+            const sorted = contestants
+              .map((c: any, index: number) => ({
+                contestantId: c.id,
+                name: c.name,
+                photoUrl: c.photoUrl,
+                score: c.score || 0,
+                position: index + 1,
+              }))
+              .sort((a: any, b: any) => b.score - a.score)
+              .map((c: any, index: number) => ({ ...c, position: index + 1 }));
+            setLeaderboard(sorted);
+          }
+        } catch (error) {
+          console.error("Error loading contestants for leaderboard:", error);
         }
       }
     } catch (error) {
@@ -107,6 +155,17 @@ function HostGamePage() {
     socket.on("answer-result", (data) => {
       // Handle answer result if needed
       console.log("Answer result:", data);
+      // If answer is correct, clear current question and selected question
+      // so host can select the next question
+      if (data.isCorrect) {
+        setCurrentQuestion(null);
+        setSelectedQuestion(null);
+      }
+    });
+
+    socket.on("game-update", (data) => {
+      // Update game state when it changes (e.g., when questions are answered)
+      setGame(data.game);
     });
 
     return () => {
@@ -115,6 +174,7 @@ function HostGamePage() {
       socket.off("score-update");
       socket.off("leaderboard-update");
       socket.off("answer-result");
+      socket.off("game-update");
     };
   }, [socket, setCurrentQuestion, setBuzzerQueue, setLeaderboard, updateContestantScore]);
 

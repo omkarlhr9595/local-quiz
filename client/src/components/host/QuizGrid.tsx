@@ -25,9 +25,18 @@ export function QuizGrid({ onCardSelect }: QuizGridProps) {
   }
 
   const isCardAnswered = (categoryIndex: number, questionIndex: number) => {
+    if (!game) return false;
+    
     // Check if this question has been answered
-    // This would need to be tracked in game state
-    return false;
+    const isAnswered = game.answeredQuestions?.some(
+      (aq) => aq.categoryIndex === categoryIndex && aq.questionIndex === questionIndex
+    );
+    
+    // Also check if this question is currently revealed
+    const isCurrentlyRevealed = game.currentQuestion?.categoryIndex === categoryIndex &&
+      game.currentQuestion?.questionIndex === questionIndex;
+    
+    return isAnswered || isCurrentlyRevealed;
   };
 
   const handleCardClick = (categoryIndex: number, questionIndex: number) => {

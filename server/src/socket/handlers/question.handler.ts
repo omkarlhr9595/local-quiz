@@ -63,6 +63,16 @@ export const handleHostRevealQuestion = async (
       return;
     }
 
+    // Check if this question has already been answered
+    const isAlreadyAnswered = (game.answeredQuestions || []).some(
+      (aq) => aq.categoryIndex === categoryIndex && aq.questionIndex === questionIndex
+    );
+
+    if (isAlreadyAnswered) {
+      socket.emit("error", { message: "This question has already been answered" });
+      return;
+    }
+
     // Update game state
     await gameService.updateGame(gameId, {
       currentQuestion: {
@@ -86,6 +96,16 @@ export const handleHostRevealQuestion = async (
       question: question.question,
       points: question.points,
       category: category.name,
+    });
+
+    // Broadcast buzzer queue reset to all clients
+    socket.to(gameId).emit("buzzer-queue-update", {
+      queue: [],
+      currentAnswering: null,
+    });
+    socket.emit("buzzer-queue-update", {
+      queue: [],
+      currentAnswering: null,
     });
 
     console.log(

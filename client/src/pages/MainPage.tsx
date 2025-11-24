@@ -18,7 +18,6 @@ interface PhotoDisplayData {
 function MainPage() {
   const [view, setView] = useState<MonitorView>("grid");
   const [photoDisplay, setPhotoDisplay] = useState<PhotoDisplayData | null>(null);
-  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(new Set());
 
   const {
     game,
@@ -31,6 +30,7 @@ function MainPage() {
     setContestants,
     setCurrentQuestion,
     setLeaderboard,
+    setBuzzerQueue,
   } = useGameStore();
 
   const { socket, connect, joinRoom } = useSocketStore();
@@ -39,6 +39,46 @@ function MainPage() {
   useEffect(() => {
     loadGameData();
   }, []);
+
+  // Restore game state when game is loaded
+  useEffect(() => {
+    if (game) {
+      // Restore current question if one is active
+      if (game.currentQuestion && quiz) {
+        const category = quiz.categories[game.currentQuestion.categoryIndex];
+        if (category) {
+          setCurrentQuestion({
+            question: game.currentQuestion.question,
+            points: game.currentQuestion.points,
+            category: category.name,
+          });
+        }
+      }
+
+      // Restore buzzer queue
+      if (game.buzzerQueue && game.buzzerQueue.length > 0) {
+        const currentAnswering = game.buzzerQueue.length > 0 
+          ? game.buzzerQueue[0].contestantId 
+          : null;
+        setBuzzerQueue(game.buzzerQueue, currentAnswering);
+      }
+
+      // Generate leaderboard from contestants
+      if (contestants.length > 0) {
+        const sorted = contestants
+          .map((c, index) => ({
+            contestantId: c.id,
+            name: c.name,
+            photoUrl: c.photoUrl,
+            score: c.score || 0,
+            position: index + 1,
+          }))
+          .sort((a, b) => b.score - a.score)
+          .map((c, index) => ({ ...c, position: index + 1 }));
+        setLeaderboard(sorted);
+      }
+    }
+  }, [game, quiz, contestants, setCurrentQuestion, setBuzzerQueue, setLeaderboard]);
 
   // Connect to Socket.io
   useEffect(() => {
@@ -99,13 +139,12 @@ function MainPage() {
           setTimeout(() => {
             setView("leaderboard");
             setPhotoDisplay(null);
+            
+            // After 5 seconds on leaderboard, return to grid
+            setTimeout(() => {
+              setView("grid");
+            }, 5000);
           }, 3000);
-        }
-
-        // Mark question as answered
-        if (currentQuestion) {
-          const questionKey = `${currentQuestion.category}-${currentQuestion.points}`;
-          setAnsweredQuestions((prev) => new Set(prev).add(questionKey));
         }
       }
     };
@@ -130,11 +169,18 @@ function MainPage() {
       setContestants(updatedContestants);
     };
 
+    const handleGameUpdate = (data: { game: any }) => {
+      // Update game state when it changes (e.g., when questions are answered)
+      // This ensures the grid updates to show answered questions
+      setGame(data.game);
+    };
+
     socket.on("main-monitor-view", handleMainMonitorView);
     socket.on("question-revealed", handleQuestionRevealed);
     socket.on("answer-result", handleAnswerResult);
     socket.on("leaderboard-update", handleLeaderboardUpdate);
     socket.on("score-update", handleScoreUpdate);
+    socket.on("game-update", handleGameUpdate);
 
     return () => {
       socket.off("main-monitor-view", handleMainMonitorView);
@@ -142,6 +188,7 @@ function MainPage() {
       socket.off("answer-result", handleAnswerResult);
       socket.off("leaderboard-update", handleLeaderboardUpdate);
       socket.off("score-update", handleScoreUpdate);
+      socket.off("game-update", handleGameUpdate);
     };
   }, [socket, contestants, currentQuestion, setCurrentQuestion, setLeaderboard, setContestants]);
 
@@ -173,13 +220,18 @@ function MainPage() {
   };
 
   const isQuestionAnswered = (categoryIndex: number, questionIndex: number) => {
-    if (!quiz) return false;
-    const category = quiz.categories[categoryIndex];
-    if (!category) return false;
-    const question = category.questions[questionIndex];
-    if (!question) return false;
-    const questionKey = `${category.name}-${question.points}`;
-    return answeredQuestions.has(questionKey);
+    if (!game) return false;
+    
+    // Check if this question has been answered (from DB)
+    const isAnswered = (game.answeredQuestions || []).some(
+      (aq) => aq.categoryIndex === categoryIndex && aq.questionIndex === questionIndex
+    );
+    
+    // Also check if this question is currently revealed
+    const isCurrentlyRevealed = game.currentQuestion?.categoryIndex === categoryIndex &&
+      game.currentQuestion?.questionIndex === questionIndex;
+    
+    return isAnswered || isCurrentlyRevealed;
   };
 
   if (!quiz || !game) {
