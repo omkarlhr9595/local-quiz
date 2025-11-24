@@ -22,13 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useGameStore } from "@/store/gameStore";
 import { useSocketStore } from "@/store/socketStore";
 import { gameApi, quizApi } from "@/lib/api";
@@ -180,10 +173,14 @@ function HostGamePage() {
     if (!gameToDelete) return;
 
     setLoading(true);
-    setDeleteDialogOpen(false);
     
     try {
-      await gameApi.delete(gameToDelete);
+      const response = await gameApi.delete(gameToDelete);
+      
+      // Check if the deletion was successful
+      if (!response.data.success) {
+        throw new Error(response.data.error || "Failed to delete game");
+      }
 
       // If the deleted game was the active one, clear it
       if (game && game.id === gameToDelete) {
@@ -197,15 +194,21 @@ function HostGamePage() {
       // If there's an active game, reload it
       try {
         await loadActiveGame();
-      } catch (error) {
+      } catch {
         // No active game, that's fine
       }
+
+      // Close dialog after successful deletion
+      setDeleteDialogOpen(false);
+      setGameToDelete(null);
     } catch (error) {
       console.error("Error deleting game:", error);
-      alert("Failed to delete game");
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete game";
+      alert(errorMessage);
+      // Keep dialog open on error - don't close it
+      // The dialog will stay open so user can try again or cancel
     } finally {
       setLoading(false);
-      setGameToDelete(null);
     }
   };
 
@@ -288,6 +291,32 @@ function HostGamePage() {
             </div>
           </Card>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the game
+                and all associated contestants from the database.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async (e) => {
+                  e.preventDefault();
+                  await handleDeleteConfirm();
+                }}
+                disabled={loading}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {loading ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
@@ -400,12 +429,16 @@ function HostGamePage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteConfirm}
+              onClick={async (e) => {
+                e.preventDefault();
+                await handleDeleteConfirm();
+              }}
+              disabled={loading}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {loading ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
