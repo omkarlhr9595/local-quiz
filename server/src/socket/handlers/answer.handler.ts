@@ -96,32 +96,140 @@ export const handleHostAnswerConfirm = async (
         (entry) => entry.contestantId !== contestantId
       );
 
-      // Update game state
-      await gameService.updateGame(gameId, {
-        buzzerQueue: updatedQueue,
-      });
+      // Check if queue is now empty (all contestants failed to answer)
+      if (updatedQueue.length === 0 && game.currentQuestion) {
+        // All contestants failed - mark question as answered so it can't be revealed again
+        const answeredQuestion = {
+          categoryIndex: game.currentQuestion.categoryIndex,
+          questionIndex: game.currentQuestion.questionIndex,
+        };
 
-      // Determine next contestant in queue
-      const currentAnswering =
-        updatedQueue.length > 0 ? updatedQueue[0].contestantId : null;
+        const updatedAnsweredQuestions = [
+          ...(game.answeredQuestions || []),
+          answeredQuestion,
+        ];
 
-      // Broadcast queue update
-      socket.to(gameId).emit("buzzer-queue-update", {
-        queue: updatedQueue,
-        currentAnswering,
-      });
-      socket.emit("buzzer-queue-update", {
-        queue: updatedQueue,
-        currentAnswering,
-      });
+        // Clear current question and mark as answered
+        const updatedGame = await gameService.updateGame(gameId, {
+          currentQuestion: null,
+          buzzerQueue: [],
+          status: "active",
+          answeredQuestions: updatedAnsweredQuestions,
+        });
 
-      console.log(
-        `❌ Contestant ${contestantId} answered incorrectly. Next in queue.`
-      );
+        // Broadcast game state update so frontend can update the grid
+        socket.to(gameId).emit("game-update", {
+          game: updatedGame,
+        });
+        socket.emit("game-update", {
+          game: updatedGame,
+        });
+
+        // Broadcast queue update to clear buzzer queue on all clients
+        socket.to(gameId).emit("buzzer-queue-update", {
+          queue: [],
+          currentAnswering: null,
+        });
+        socket.emit("buzzer-queue-update", {
+          queue: [],
+          currentAnswering: null,
+        });
+
+        console.log(
+          `❌ All contestants failed to answer. Question marked as answered and cannot be revealed again.`
+        );
+      } else {
+        // Still have contestants in queue - continue with next contestant
+        // Update game state
+        await gameService.updateGame(gameId, {
+          buzzerQueue: updatedQueue,
+        });
+
+        // Determine next contestant in queue
+        const currentAnswering =
+          updatedQueue.length > 0 ? updatedQueue[0].contestantId : null;
+
+        // Broadcast queue update
+        socket.to(gameId).emit("buzzer-queue-update", {
+          queue: updatedQueue,
+          currentAnswering,
+        });
+        socket.emit("buzzer-queue-update", {
+          queue: updatedQueue,
+          currentAnswering,
+        });
+
+        console.log(
+          `❌ Contestant ${contestantId} answered incorrectly. Next in queue.`
+        );
+      }
     }
   } catch (error) {
     console.error("Error confirming answer:", error);
     socket.emit("error", { message: "Failed to confirm answer" });
+  }
+};
+
+export const handleHostMarkQuestionDone = async (
+  socket: Socket<never, ServerToClientEvents>,
+  gameId: string
+) => {
+  try {
+    const game = await gameService.getGameById(gameId);
+    if (!game) {
+      socket.emit("error", { message: "Game not found" });
+      return;
+    }
+
+    // Check if there's a current question
+    if (!game.currentQuestion) {
+      socket.emit("error", { message: "No active question to mark as done" });
+      return;
+    }
+
+    // Mark question as answered
+    const answeredQuestion = {
+      categoryIndex: game.currentQuestion.categoryIndex,
+      questionIndex: game.currentQuestion.questionIndex,
+    };
+
+    const updatedAnsweredQuestions = [
+      ...(game.answeredQuestions || []),
+      answeredQuestion,
+    ];
+
+    // Clear current question and mark as answered
+    const updatedGame = await gameService.updateGame(gameId, {
+      currentQuestion: null,
+      buzzerQueue: [],
+      status: "active",
+      answeredQuestions: updatedAnsweredQuestions,
+    });
+
+    // Broadcast game state update so frontend can update the grid
+    socket.to(gameId).emit("game-update", {
+      game: updatedGame,
+    });
+    socket.emit("game-update", {
+      game: updatedGame,
+    });
+
+    // Broadcast queue update to clear buzzer queue on all clients
+    socket.to(gameId).emit("buzzer-queue-update", {
+      queue: [],
+      currentAnswering: null,
+    });
+    socket.emit("buzzer-queue-update", {
+      queue: [],
+      currentAnswering: null,
+    });
+
+    console.log(
+      `✅ Host marked question as done. Question cannot be revealed again.`
+    );
+  } catch (error) {
+    console.error("Error marking question as done:", error);
+    socket.emit("error", { message: "Failed to mark question as done" });
   }
 };
 

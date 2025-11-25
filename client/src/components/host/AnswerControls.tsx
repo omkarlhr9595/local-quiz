@@ -10,7 +10,7 @@ export function AnswerControls() {
     (c) => c.id === currentAnswering
   );
 
-  if (!currentAnswering || !currentQuestion) {
+  if (!currentQuestion) {
     return null;
   }
 
@@ -25,28 +25,48 @@ export function AnswerControls() {
     }
   };
 
+  const handleMarkDone = () => {
+    if (socket && gameId) {
+      socket.emit("host-mark-question-done", {
+        gameId,
+      });
+    }
+  };
+
   return (
     <div className="space-y-3">
-      <div className="text-sm font-medium">
-        Contestant Answering: {answeringContestant?.name || currentAnswering}
-      </div>
-      <div className="flex gap-3">
-        <Button
-          onClick={() => handleAnswer(true)}
-          className="flex-1 bg-green-600 hover:bg-green-700"
-          size="lg"
-        >
-          ✓ Correct
-        </Button>
-        <Button
-          onClick={() => handleAnswer(false)}
-          variant="destructive"
-          className="flex-1"
-          size="lg"
-        >
-          ✗ Incorrect
-        </Button>
-      </div>
+      {currentAnswering && (
+        <>
+          <div className="text-sm font-medium">
+            Contestant Answering: {answeringContestant?.name || currentAnswering}
+          </div>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => handleAnswer(true)}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+              size="lg"
+            >
+              ✓ Correct
+            </Button>
+            <Button
+              onClick={() => handleAnswer(false)}
+              variant="destructive"
+              className="flex-1"
+              size="lg"
+            >
+              ✗ Incorrect
+            </Button>
+          </div>
+        </>
+      )}
+      <Button
+        onClick={handleMarkDone}
+        variant="outline"
+        className="w-full"
+        size="lg"
+      >
+        Mark Question as Done
+      </Button>
     </div>
   );
 }

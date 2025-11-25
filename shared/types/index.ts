@@ -101,6 +101,10 @@ export interface GameControlPayload {
   gameId: string;
 }
 
+export interface HostMarkQuestionDonePayload {
+  gameId: string;
+}
+
 // API Response Types
 export interface ApiResponse<T> {
   success: boolean;
@@ -153,6 +157,7 @@ export interface ClientToServerEvents {
   "host-reveal-question": (payload: HostRevealQuestionPayload) => void;
   "buzzer-press": (payload: BuzzerPressPayload) => void;
   "host-answer-confirm": (payload: HostAnswerConfirmPayload) => void;
+  "host-mark-question-done": (payload: HostMarkQuestionDonePayload) => void;
   "game-pause": (payload: GameControlPayload) => void;
   "game-resume": (payload: GameControlPayload) => void;
   "game-reset": (payload: GameControlPayload) => void;

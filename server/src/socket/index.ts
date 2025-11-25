@@ -7,7 +7,7 @@ import type {
 import { handleJoinRoom, handleLeaveRoom } from "./handlers/room.handler.js";
 import { handleSelectQuestion, handleHostRevealQuestion } from "./handlers/question.handler.js";
 import { handleBuzzerPress } from "./handlers/buzzer.handler.js";
-import { handleHostAnswerConfirm } from "./handlers/answer.handler.js";
+import { handleHostAnswerConfirm, handleHostMarkQuestionDone } from "./handlers/answer.handler.js";
 import {
   handleGamePause,
   handleGameResume,
@@ -95,6 +95,16 @@ export const setupSocketIO = (io: Server) => {
         payload.isCorrect,
         payload.points
       );
+    });
+
+    socket.on("host-mark-question-done", async (payload) => {
+      const { gameId, role } = socket.data;
+      if (!gameId || role !== "host") {
+        socket.emit("error", { message: "Only host can mark questions as done" });
+        return;
+      }
+
+      await handleHostMarkQuestionDone(socket, payload.gameId);
     });
 
     // Game Controls

@@ -34,7 +34,7 @@ function HostGamePage() {
     questionIndex: number;
   } | null>(null);
 
-  const { game, quiz, setGame, setQuiz, setCurrentQuestion, setBuzzerQueue, setLeaderboard, updateContestantScore } = useGameStore();
+  const { game, quiz, setGame, setQuiz, setCurrentQuestion, setBuzzerQueue, setLeaderboard, updateContestantScore, setContestants } = useGameStore();
   const { socket, connect, joinRoom } = useSocketStore();
 
   // Load active game on mount and reload games list
@@ -92,6 +92,16 @@ function HostGamePage() {
           const contestantsResponse = await contestantApi.getByGameId(gameData.id);
           if (contestantsResponse.data.success) {
             const contestants = contestantsResponse.data.data;
+            // Store contestants in the game store so they can be accessed by BuzzerQueue
+            setContestants(contestants.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              photoUrl: c.photoUrl || "",
+              gameId: c.gameId,
+              score: c.score || 0,
+              route: c.route,
+              createdAt: c.createdAt,
+            })));
             const sorted = contestants
               .map((c: any, index: number) => ({
                 contestantId: c.id,
@@ -166,6 +176,11 @@ function HostGamePage() {
     socket.on("game-update", (data) => {
       // Update game state when it changes (e.g., when questions are answered)
       setGame(data.game);
+      // Clear current question if it's been cleared in the game state
+      if (!data.game.currentQuestion) {
+        setCurrentQuestion(null);
+        setSelectedQuestion(null);
+      }
     });
 
     return () => {
@@ -211,6 +226,25 @@ function HostGamePage() {
         const quizResponse = await quizApi.getById(gameData.quizId);
         if (quizResponse.data.success) {
           setQuiz(quizResponse.data.data);
+        }
+
+        // Load contestants
+        try {
+          const contestantsResponse = await contestantApi.getByGameId(gameData.id);
+          if (contestantsResponse.data.success) {
+            const contestants = contestantsResponse.data.data;
+            setContestants(contestants.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              photoUrl: c.photoUrl || "",
+              gameId: c.gameId,
+              score: c.score || 0,
+              route: c.route,
+              createdAt: c.createdAt,
+            })));
+          }
+        } catch (error) {
+          console.error("Error loading contestants:", error);
         }
 
         // Reload games list to show updated statuses
