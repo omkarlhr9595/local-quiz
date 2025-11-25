@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import os from "os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -10,6 +11,44 @@ const __dirname = dirname(__filename);
 const getUploadsDir = () => {
   return path.join(__dirname, "../../uploads");
 };
+
+// Get the first non-internal IPv4 address from network interfaces
+const getNetworkIP = (): string | null => {
+  const interfaces = os.networkInterfaces();
+  
+  // Look for the first non-internal IPv4 address
+  // Prefer en0, en1, eth0, etc. (common network interface names)
+  const preferredNames = ["en0", "en1", "eth0", "wlan0", "Wi-Fi", "Ethernet"];
+  
+  // First, try preferred interface names
+  for (const name of preferredNames) {
+    const iface = interfaces[name];
+    if (iface) {
+      for (const addr of iface) {
+        if (addr.family === "IPv4" && !addr.internal) {
+          return addr.address;
+        }
+      }
+    }
+  }
+  
+  // If no preferred interface found, search all interfaces
+  for (const name of Object.keys(interfaces)) {
+    const iface = interfaces[name];
+    if (iface) {
+      for (const addr of iface) {
+        if (addr.family === "IPv4" && !addr.internal) {
+          return addr.address;
+        }
+      }
+    }
+  }
+  
+  return null;
+};
+
+// Cache the network IP to avoid repeated lookups
+let cachedNetworkIP: string | null = null;
 
 // Get the base URL for serving images
 const getBaseUrl = (): string => {
@@ -22,10 +61,26 @@ const getBaseUrl = (): string => {
   const PORT = process.env.PORT || 3001;
   const hostname = process.env.HOST || "localhost";
   
-  // If HOST is 0.0.0.0, use localhost (0.0.0.0 can't be used in URLs)
-  const urlHost = hostname === "0.0.0.0" ? "localhost" : hostname;
+  // If HOST is 0.0.0.0, try to detect the network IP for local network access
+  if (hostname === "0.0.0.0") {
+    // Cache the network IP to avoid repeated lookups
+    if (!cachedNetworkIP) {
+      cachedNetworkIP = getNetworkIP();
+    }
+    
+    // Use detected network IP if available, otherwise fall back to localhost
+    const urlHost = cachedNetworkIP || "localhost";
+    
+    if (cachedNetworkIP) {
+      console.log(`🌐 Using network IP for image URLs: ${cachedNetworkIP}`);
+    } else {
+      console.warn(`⚠️  Could not detect network IP. Using localhost. Set PUBLIC_URL env var for network access.`);
+    }
+    
+    return `http://${urlHost}:${PORT}`;
+  }
   
-  return `http://${urlHost}:${PORT}`;
+  return `http://${hostname}:${PORT}`;
 };
 
 interface UploadPhotoParams {

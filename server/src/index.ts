@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { cwd } from "process";
+import os from "os";
 
 // Load .env file - try multiple paths
 const __filename = fileURLToPath(import.meta.url);
@@ -113,17 +114,58 @@ import { setupSocketIO } from "./socket/index.js";
   // Setup Socket.io handlers
   setupSocketIO(io);
 
+  // Helper function to get network IP
+  const getNetworkIP = (): string | null => {
+    const interfaces = os.networkInterfaces();
+    const preferredNames = ["en0", "en1", "eth0", "wlan0", "Wi-Fi", "Ethernet"];
+    
+    for (const name of preferredNames) {
+      const iface = interfaces[name];
+      if (iface) {
+        for (const addr of iface) {
+          if (addr.family === "IPv4" && !addr.internal) {
+            return addr.address;
+          }
+        }
+      }
+    }
+    
+    for (const name of Object.keys(interfaces)) {
+      const iface = interfaces[name];
+      if (iface) {
+        for (const addr of iface) {
+          if (addr.family === "IPv4" && !addr.internal) {
+            return addr.address;
+          }
+        }
+      }
+    }
+    
+    return null;
+  };
+
   httpServer.listen(PORT, HOST, () => {
     const displayHost = HOST === "0.0.0.0" ? "localhost" : HOST;
+    const networkIP = HOST === "0.0.0.0" ? getNetworkIP() : null;
+    
     console.log(`🚀 Server running on http://${displayHost}:${PORT}`);
+    if (networkIP) {
+      console.log(`🌐 Network access: http://${networkIP}:${PORT}`);
+    }
     console.log(`📁 Serving uploads from: ${uploadsPath}`);
     
     // In development, show helpful network access info
     if (NODE_ENV === "development") {
-      console.log(`\n💡 To access from other devices on your local network:`);
-      console.log(`   1. Find your machine's IP address (e.g., 192.168.1.100)`);
-      console.log(`   2. Set PUBLIC_URL environment variable: PUBLIC_URL=http://192.168.1.100:${PORT}`);
-      console.log(`   3. This ensures image URLs work correctly on all devices\n`);
+      if (networkIP) {
+        console.log(`\n✅ Network IP detected: ${networkIP}`);
+        console.log(`   Images will be accessible from other devices on your network`);
+        console.log(`   If images don't load, set PUBLIC_URL=http://${networkIP}:${PORT}\n`);
+      } else {
+        console.log(`\n💡 To access from other devices on your local network:`);
+        console.log(`   1. Find your machine's IP address (e.g., 192.168.1.100)`);
+        console.log(`   2. Set PUBLIC_URL environment variable: PUBLIC_URL=http://192.168.1.100:${PORT}`);
+        console.log(`   3. This ensures image URLs work correctly on all devices\n`);
+      }
     }
   });
 })();
