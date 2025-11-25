@@ -131,7 +131,10 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       return;
     }
 
+    // Capture timestamp IMMEDIATELY when buzzer is pressed (before any async operations)
+    // This ensures the timestamp reflects the actual moment the user pressed, not when the checks completed
     const timestamp = Date.now();
+
     socket.emit("buzzer-press", {
       gameId: game.id,
       contestantId: contestant.id,
@@ -148,6 +151,7 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.code === "Space" && currentQuestion && !buzzerDisabled) {
         e.preventDefault();
+        // handleBuzzerPress captures timestamp immediately when called
         handleBuzzerPress();
       }
     };
