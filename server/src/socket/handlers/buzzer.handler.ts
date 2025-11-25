@@ -1,6 +1,6 @@
 import type { Socket } from "socket.io";
 import type { ServerToClientEvents } from "../types.js";
-import { gameService } from "../../services/firestore.service.js";
+import { db } from "../../config/firebase.js";
 
 export const handleBuzzerPress = async (
   socket: Socket<never, ServerToClientEvents>,
@@ -9,43 +9,54 @@ export const handleBuzzerPress = async (
   timestamp: number
 ) => {
   try {
-    const game = await gameService.getGameById(gameId);
-    if (!game) {
-      socket.emit("error", { message: "Game not found" });
-      return;
-    }
+    // Use a transaction to ensure atomic queue updates and prevent race conditions
+    const updatedQueue = await db.runTransaction(async (transaction) => {
+      const gameRef = db.collection("games").doc(gameId);
+      const gameDoc = await transaction.get(gameRef);
 
-    // Check if there's an active question
-    if (!game.currentQuestion) {
-      socket.emit("error", { message: "No active question" });
-      return;
-    }
+      if (!gameDoc.exists) {
+        throw new Error("Game not found");
+      }
 
-    // Check if game is active
-    if (game.status !== "active") {
-      socket.emit("error", { message: "Game is not active" });
-      return;
-    }
+      const gameData = gameDoc.data()!;
 
-    // Check if contestant is already in queue
-    const alreadyInQueue = game.buzzerQueue.some(
-      (entry) => entry.contestantId === contestantId
-    );
+      // Check if there's an active question
+      if (!gameData.currentQuestion) {
+        throw new Error("No active question");
+      }
 
-    if (alreadyInQueue) {
-      socket.emit("error", { message: "Already in buzzer queue" });
-      return;
-    }
+      // Check if game is active
+      if (gameData.status !== "active") {
+        throw new Error("Game is not active");
+      }
 
-    // Add to queue
-    const updatedQueue = [
-      ...game.buzzerQueue,
-      { contestantId, timestamp },
-    ].sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp (fastest first)
+      // Get current buzzer queue
+      const currentQueue = (gameData.buzzerQueue || []) as Array<{
+        contestantId: string;
+        timestamp: number;
+      }>;
 
-    // Update game state
-    const updatedGame = await gameService.updateGame(gameId, {
-      buzzerQueue: updatedQueue,
+      // Check if contestant is already in queue
+      const alreadyInQueue = currentQueue.some(
+        (entry) => entry.contestantId === contestantId
+      );
+
+      if (alreadyInQueue) {
+        throw new Error("Already in buzzer queue");
+      }
+
+      // Add to queue and sort by timestamp (fastest first)
+      const updatedQueue = [...currentQueue, { contestantId, timestamp }].sort(
+        (a, b) => a.timestamp - b.timestamp
+      );
+
+      // Update game state atomically within transaction
+      transaction.update(gameRef, {
+        buzzerQueue: updatedQueue,
+        updatedAt: new Date().toISOString(),
+      });
+
+      return updatedQueue;
     });
 
     // Determine who's currently answering (first in queue)
@@ -63,11 +74,12 @@ export const handleBuzzerPress = async (
     });
 
     console.log(
-      `🔔 Contestant ${contestantId} buzzed in (position ${updatedQueue.length} in queue)`
+      `🔔 Contestant ${contestantId} buzzed in (position ${updatedQueue.findIndex((q) => q.contestantId === contestantId) + 1} in queue)`
     );
   } catch (error) {
     console.error("Error handling buzzer press:", error);
-    socket.emit("error", { message: "Failed to process buzzer press" });
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to process buzzer press";
+    socket.emit("error", { message: errorMessage });
   }
 };
-
