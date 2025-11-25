@@ -80,15 +80,7 @@ function HostGamePage() {
           }
         }
 
-        // Restore buzzer queue
-        if (gameData.buzzerQueue && gameData.buzzerQueue.length > 0) {
-          const currentAnswering = gameData.buzzerQueue.length > 0 
-            ? gameData.buzzerQueue[0].contestantId 
-            : null;
-          setBuzzerQueue(gameData.buzzerQueue, currentAnswering);
-        }
-
-        // Load contestants and generate leaderboard
+        // Load contestants FIRST (needed for buzzer queue display)
         try {
           const contestantsResponse = await contestantApi.getByGameId(gameData.id);
           if (contestantsResponse.data.success) {
@@ -117,6 +109,17 @@ function HostGamePage() {
           }
         } catch (error) {
           console.error("Error loading contestants for leaderboard:", error);
+        }
+
+        // Restore buzzer queue ONLY if there's a current question (otherwise clear it)
+        if (gameData.currentQuestion && gameData.buzzerQueue && gameData.buzzerQueue.length > 0) {
+          const currentAnswering = gameData.buzzerQueue.length > 0 
+            ? gameData.buzzerQueue[0].contestantId 
+            : null;
+          setBuzzerQueue(gameData.buzzerQueue, currentAnswering);
+        } else {
+          // Clear queue if no current question
+          setBuzzerQueue([], null);
         }
       }
     } catch (error) {
@@ -232,6 +235,10 @@ function HostGamePage() {
       if (activateResponse.data.success) {
         const gameData = activateResponse.data.data;
         setGame(gameData);
+
+        // Clear buzzer queue when activating (fresh start)
+        setBuzzerQueue([], null);
+        setCurrentQuestion(null);
 
         // Load quiz
         const quizResponse = await quizApi.getById(gameData.quizId);

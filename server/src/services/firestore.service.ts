@@ -235,8 +235,12 @@ export const gameService = {
     // Set all games to "waiting" except the one being activated
     const updatePromises = allGames.map((game) => {
       if (game.id === gameId) {
-        // Activate this game
-        return this.updateGame(gameId, { status: "active" });
+        // Activate this game and clear buzzer queue (fresh start)
+        return this.updateGame(gameId, { 
+          status: "active",
+          buzzerQueue: [], // Clear queue when activating
+          currentQuestion: null, // Clear any current question
+        });
       } else if (game.status === "active") {
         // Deactivate other active games
         return this.updateGame(game.id, { status: "waiting" });
