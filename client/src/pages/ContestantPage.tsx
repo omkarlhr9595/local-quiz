@@ -136,6 +136,12 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
         setIsInQueue(false);
         setBuzzerDisabled(false);
       }
+
+      // If answer is correct, clear current question so UI shows "Waiting for question..."
+      if (data.isCorrect) {
+        console.log(`[CLIENT] Answer was correct, clearing current question`);
+        setCurrentQuestion(null);
+      }
     };
 
     const handleScoreUpdate = (data: { contestantId: string; newScore: number }) => {
@@ -151,16 +157,27 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       }
     };
 
+    const handleGameUpdate = (data: { game: any }) => {
+      // Clear current question if game state shows no current question
+      // This handles cases like "Mark Question as Done" or when question is cleared
+      if (data.game && !data.game.currentQuestion) {
+        console.log(`[CLIENT] Game update received - no current question, clearing question state`);
+        setCurrentQuestion(null);
+      }
+    };
+
     socket.on("question-revealed", handleQuestionRevealed);
     socket.on("buzzer-queue-update", handleBuzzerQueueUpdate);
     socket.on("answer-result", handleAnswerResult);
     socket.on("score-update", handleScoreUpdate);
+    socket.on("game-update", handleGameUpdate);
 
     return () => {
       socket.off("question-revealed", handleQuestionRevealed);
       socket.off("buzzer-queue-update", handleBuzzerQueueUpdate);
       socket.off("answer-result", handleAnswerResult);
       socket.off("score-update", handleScoreUpdate);
+      socket.off("game-update", handleGameUpdate);
     };
   }, [socket, contestant, setCurrentQuestion, setBuzzerQueue]);
 
