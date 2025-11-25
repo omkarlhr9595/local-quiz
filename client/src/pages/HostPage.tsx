@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { HostNavigation } from "@/components/host/HostNavigation";
 import { MainMonitorControls } from "@/components/host/MainMonitorControls";
@@ -26,6 +26,7 @@ import {
 import { useGameStore } from "@/store/gameStore";
 import { useSocketStore } from "@/store/socketStore";
 import { gameApi, quizApi, contestantApi } from "@/lib/api";
+import buzzerSound from "@/assets/Bell Ding Sound EFFECT.mp3";
 
 function HostGamePage() {
   const navigate = useNavigate();
@@ -37,6 +38,25 @@ function HostGamePage() {
 
   const { game, quiz, setGame, setQuiz, setCurrentQuestion, setBuzzerQueue, setLeaderboard, updateContestantScore, setContestants } = useGameStore();
   const { socket, connect, joinRoom } = useSocketStore();
+  
+  // Track previous first contestant in queue to detect when someone new becomes first
+  const previousFirstContestantRef = useRef<string | null>(null);
+  
+  // Create audio object for buzzer sound
+  const buzzerSoundRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Initialize audio on mount
+  useEffect(() => {
+    buzzerSoundRef.current = new Audio(buzzerSound);
+    buzzerSoundRef.current.preload = "auto";
+    
+    return () => {
+      if (buzzerSoundRef.current) {
+        buzzerSoundRef.current.pause();
+        buzzerSoundRef.current = null;
+      }
+    };
+  }, []);
 
   // Load active game on mount and reload games list
   useEffect(() => {
@@ -152,6 +172,8 @@ function HostGamePage() {
         points: data.points,
         category: data.category,
       });
+      // Reset previous first contestant so sound can play for new question
+      previousFirstContestantRef.current = null;
     });
 
     socket.on("buzzer-queue-update", (data) => {
@@ -165,6 +187,26 @@ function HostGamePage() {
         );
       });
       console.log(`[HOST] ========== UPDATE COMPLETE ==========\n`);
+      
+      // Check if someone new became first in queue
+      const newFirstContestant = data.queue.length > 0 ? data.queue[0].contestantId : null;
+      const previousFirstContestant = previousFirstContestantRef.current;
+      
+      // Play sound if someone new became first (queue was empty and now has someone, or first person changed)
+      if (newFirstContestant && newFirstContestant !== previousFirstContestant) {
+        console.log(`[HOST] New first in queue: ${newFirstContestant} - Playing sound`);
+        if (buzzerSoundRef.current) {
+          // Reset audio to beginning and play
+          buzzerSoundRef.current.currentTime = 0;
+          buzzerSoundRef.current.play().catch((error) => {
+            console.error("Error playing buzzer sound:", error);
+          });
+        }
+      }
+      
+      // Update the ref to track the new first contestant
+      previousFirstContestantRef.current = newFirstContestant;
+      
       setBuzzerQueue(data.queue, data.currentAnswering);
     });
 

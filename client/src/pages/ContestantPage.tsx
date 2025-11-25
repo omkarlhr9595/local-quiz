@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { useSocketStore } from "@/store/socketStore";
 import { contestantApi, gameApi } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import buzzerSound from "@/assets/Bell Ding Sound EFFECT.mp3";
 
 interface ContestantPageProps {
   contestantNumber: number;
@@ -28,6 +29,25 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
   } = useGameStore();
 
   const { socket, connect, joinRoom } = useSocketStore();
+  
+  // Track previous first status to detect when contestant becomes first
+  const previousFirstStatusRef = useRef<boolean>(false);
+  
+  // Create audio object for buzzer sound
+  const buzzerSoundRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Initialize audio on mount
+  useEffect(() => {
+    buzzerSoundRef.current = new Audio(buzzerSound);
+    buzzerSoundRef.current.preload = "auto";
+    
+    return () => {
+      if (buzzerSoundRef.current) {
+        buzzerSoundRef.current.pause();
+        buzzerSoundRef.current = null;
+      }
+    };
+  }, []);
 
   // Load active game
   useEffect(() => {
@@ -73,6 +93,8 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       setIsFirstInQueue(false);
       setIsInQueue(false);
       setBuzzerDisabled(false);
+      // Reset previous first status so sound can play for new question
+      previousFirstStatusRef.current = false;
     };
 
     const handleBuzzerQueueUpdate = (data: {
@@ -116,6 +138,18 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       // Check if this contestant is first in queue
       const first = data.queue.length > 0 && data.queue[0].contestantId === contestant.id;
       setIsFirstInQueue(first);
+      
+      // Play sound if contestant just became first (wasn't first before, but is now)
+      if (first && !previousFirstStatusRef.current && buzzerSoundRef.current) {
+        console.log(`[CLIENT-BUZZER] Contestant became first - Playing sound`);
+        buzzerSoundRef.current.currentTime = 0;
+        buzzerSoundRef.current.play().catch((error) => {
+          console.error("Error playing buzzer sound:", error);
+        });
+      }
+      
+      // Update the ref to track current first status
+      previousFirstStatusRef.current = first;
 
       // Disable buzzer only if already in queue (not if someone else is answering)
       // Contestants should be able to join the queue even if someone is answering
