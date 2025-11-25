@@ -105,6 +105,14 @@ export interface HostMarkQuestionDonePayload {
   gameId: string;
 }
 
+export interface HostManualAwardPointsPayload {
+  gameId: string;
+  categoryIndex: number;
+  questionIndex: number;
+  contestantId: string;
+  points: number;
+}
+
 // API Response Types
 export interface ApiResponse<T> {
   success: boolean;
@@ -158,6 +166,7 @@ export interface ClientToServerEvents {
   "buzzer-press": (payload: BuzzerPressPayload) => void;
   "host-answer-confirm": (payload: HostAnswerConfirmPayload) => void;
   "host-mark-question-done": (payload: HostMarkQuestionDonePayload) => void;
+  "host-manual-award-points": (payload: HostManualAwardPointsPayload) => void;
   "game-pause": (payload: GameControlPayload) => void;
   "game-resume": (payload: GameControlPayload) => void;
   "game-reset": (payload: GameControlPayload) => void;

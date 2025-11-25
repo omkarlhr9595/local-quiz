@@ -7,7 +7,7 @@ import type {
 import { handleJoinRoom, handleLeaveRoom } from "./handlers/room.handler.js";
 import { handleSelectQuestion, handleHostRevealQuestion } from "./handlers/question.handler.js";
 import { handleBuzzerPress } from "./handlers/buzzer.handler.js";
-import { handleHostAnswerConfirm, handleHostMarkQuestionDone } from "./handlers/answer.handler.js";
+import { handleHostAnswerConfirm, handleHostMarkQuestionDone, handleHostManualAwardPoints } from "./handlers/answer.handler.js";
 import {
   handleGamePause,
   handleGameResume,
@@ -105,6 +105,23 @@ export const setupSocketIO = (io: Server) => {
       }
 
       await handleHostMarkQuestionDone(socket, payload.gameId);
+    });
+
+    socket.on("host-manual-award-points", async (payload) => {
+      const { gameId, role } = socket.data;
+      if (!gameId || role !== "host") {
+        socket.emit("error", { message: "Only host can manually award points" });
+        return;
+      }
+
+      await handleHostManualAwardPoints(
+        socket,
+        payload.gameId,
+        payload.categoryIndex,
+        payload.questionIndex,
+        payload.contestantId,
+        payload.points
+      );
     });
 
     // Game Controls

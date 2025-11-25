@@ -233,6 +233,59 @@ export const handleHostMarkQuestionDone = async (
   }
 };
 
+export const handleHostManualAwardPoints = async (
+  socket: Socket<never, ServerToClientEvents>,
+  gameId: string,
+  categoryIndex: number,
+  questionIndex: number,
+  contestantId: string,
+  points: number
+) => {
+  try {
+    const game = await gameService.getGameById(gameId);
+    if (!game) {
+      socket.emit("error", { message: "Game not found" });
+      return;
+    }
+
+    // Verify the question is in answeredQuestions
+    const isAnswered = (game.answeredQuestions || []).some(
+      (aq) => aq.categoryIndex === categoryIndex && aq.questionIndex === questionIndex
+    );
+
+    if (!isAnswered) {
+      socket.emit("error", { message: "Question must be answered before points can be awarded" });
+      return;
+    }
+
+    // Update contestant score
+    await contestantService.updateScore(contestantId, points);
+    const contestant = await contestantService.getContestantById(contestantId);
+
+    if (contestant) {
+      // Broadcast score update
+      socket.to(gameId).emit("score-update", {
+        contestantId,
+        newScore: contestant.score,
+      });
+      socket.emit("score-update", {
+        contestantId,
+        newScore: contestant.score,
+      });
+
+      // Generate and broadcast leaderboard
+      await broadcastLeaderboard(socket, gameId);
+    }
+
+    console.log(
+      `✅ Host manually awarded ${points} points to contestant ${contestantId} for question ${categoryIndex}-${questionIndex}`
+    );
+  } catch (error) {
+    console.error("Error manually awarding points:", error);
+    socket.emit("error", { message: "Failed to award points" });
+  }
+};
+
 const broadcastLeaderboard = async (
   socket: Socket<never, ServerToClientEvents>,
   gameId: string
