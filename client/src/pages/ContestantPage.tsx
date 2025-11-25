@@ -79,9 +79,35 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       queue: Array<{ contestantId: string; timestamp: number }>;
       currentAnswering: string | null;
     }) => {
+      console.log(`\n[CLIENT-BUZZER] ========== QUEUE UPDATE RECEIVED ==========`);
+      console.log(`[CLIENT-BUZZER] Contestant: ${contestant?.id || "unknown"} (${contestant?.name || "unknown"})`);
+      console.log(`[CLIENT-BUZZER] Queue size: ${data.queue.length}`);
+      console.log(`[CLIENT-BUZZER] Current answering: ${data.currentAnswering || "none"}`);
+      console.log(`[CLIENT-BUZZER] Queue order:`);
+      data.queue.forEach((entry, index) => {
+        const isMe = entry.contestantId === contestant?.id;
+        const marker = isMe ? " ⭐ ME" : "";
+        console.log(
+          `[CLIENT-BUZZER]   [${index + 1}]${marker} Contestant: ${entry.contestantId}, Timestamp: ${entry.timestamp} (${new Date(entry.timestamp).toISOString()})`
+        );
+      });
+
+      if (contestant) {
+        const myPosition = data.queue.findIndex((q) => q.contestantId === contestant.id);
+        const inQueue = myPosition !== -1;
+        const first = myPosition === 0;
+
+        console.log(`[CLIENT-BUZZER] My position: ${inQueue ? myPosition + 1 : "not in queue"}`);
+        console.log(`[CLIENT-BUZZER] Is first: ${first}`);
+        console.log(`[CLIENT-BUZZER] In queue: ${inQueue}`);
+      }
+
       setBuzzerQueue(data.queue, data.currentAnswering);
       
-      if (!contestant) return;
+      if (!contestant) {
+        console.log(`[CLIENT-BUZZER] ========== UPDATE COMPLETE (no contestant) ==========\n`);
+        return;
+      }
 
       // Check if this contestant is in the queue
       const inQueue = data.queue.some((entry) => entry.contestantId === contestant.id);
@@ -94,6 +120,9 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       // Disable buzzer only if already in queue (not if someone else is answering)
       // Contestants should be able to join the queue even if someone is answering
       setBuzzerDisabled(inQueue);
+
+      console.log(`[CLIENT-BUZZER] State updated: inQueue=${inQueue}, first=${first}, disabled=${inQueue}`);
+      console.log(`[CLIENT-BUZZER] ========== UPDATE COMPLETE ==========\n`);
     };
 
     const handleAnswerResult = (data: {
@@ -123,17 +152,26 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
   // Handle spacebar press for buzzer
   const handleBuzzerPress = useCallback(() => {
     if (!socket || !game || !contestant || !currentQuestion) {
+      console.log(`[CLIENT-BUZZER] ${contestant?.id || "unknown"} - Cannot buzz: missing prerequisites`);
       return;
     }
 
     // Don't allow if already disabled or already in queue
     if (buzzerDisabled || isInQueue) {
+      console.log(`[CLIENT-BUZZER] ${contestant.id} - Cannot buzz: disabled=${buzzerDisabled}, inQueue=${isInQueue}`);
       return;
     }
 
     // Capture timestamp IMMEDIATELY when buzzer is pressed (before any async operations)
     // This ensures the timestamp reflects the actual moment the user pressed, not when the checks completed
     const timestamp = Date.now();
+    const requestId = `${contestant.id}-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+
+    console.log(`\n[CLIENT-BUZZER] ========== BUZZ PRESS [${requestId}] ==========`);
+    console.log(`[CLIENT-BUZZER] Contestant: ${contestant.id} (${contestant.name})`);
+    console.log(`[CLIENT-BUZZER] Timestamp captured: ${timestamp} (${new Date(timestamp).toISOString()})`);
+    console.log(`[CLIENT-BUZZER] Game ID: ${game.id}`);
+    console.log(`[CLIENT-BUZZER] Emitting buzzer-press event...`);
 
     socket.emit("buzzer-press", {
       gameId: game.id,
@@ -141,9 +179,12 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       timestamp,
     });
 
+    console.log(`[CLIENT-BUZZER] [${requestId}] Event emitted at: ${Date.now()} (${new Date().toISOString()})`);
+
     // Disable buzzer temporarily to prevent spam
     // The buzzer-queue-update event will re-enable it if not in queue
     setBuzzerDisabled(true);
+    console.log(`[CLIENT-BUZZER] [${requestId}] Buzzer disabled locally\n`);
   }, [socket, game, contestant, currentQuestion, buzzerDisabled, isInQueue]);
 
   // Listen for spacebar keypress

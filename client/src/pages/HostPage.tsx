@@ -152,6 +152,16 @@ function HostGamePage() {
     });
 
     socket.on("buzzer-queue-update", (data) => {
+      console.log(`\n[HOST] ========== QUEUE UPDATE RECEIVED ==========`);
+      console.log(`[HOST] Queue size: ${data.queue.length}`);
+      console.log(`[HOST] Current answering: ${data.currentAnswering || "none"}`);
+      console.log(`[HOST] Queue order:`);
+      data.queue.forEach((entry, index) => {
+        console.log(
+          `[HOST]   [${index + 1}] Contestant: ${entry.contestantId}, Timestamp: ${entry.timestamp} (${new Date(entry.timestamp).toISOString()})`
+        );
+      });
+      console.log(`[HOST] ========== UPDATE COMPLETE ==========\n`);
       setBuzzerQueue(data.queue, data.currentAnswering);
     });
 
