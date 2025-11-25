@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useSocketStore } from "@/store/socketStore";
 
-type MonitorView = "grid" | "question" | "leaderboard" | "photo";
+type MonitorView = "grid" | "question" | "leaderboard";
 
 export function MainMonitorControls() {
   const [activeView, setActiveView] = useState<MonitorView>("grid");
@@ -51,14 +51,6 @@ export function MainMonitorControls() {
           onClick={() => handleViewChange("leaderboard")}
         >
           🏆 Show Leaderboard
-        </Button>
-        
-        <Button
-          variant={activeView === "photo" ? "default" : "outline"}
-          size="sm"
-          onClick={() => handleViewChange("photo")}
-        >
-          📸 Show Photo
         </Button>
         
         <div className="ml-auto">
