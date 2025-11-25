@@ -138,14 +138,29 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       }
     };
 
+    const handleScoreUpdate = (data: { contestantId: string; newScore: number }) => {
+      // Update contestant score if it's this contestant
+      if (contestant && data.contestantId === contestant.id) {
+        console.log(`[CLIENT] Score update received: ${data.newScore} points for ${contestant.name}`);
+        setContestant((prev) => {
+          if (prev) {
+            return { ...prev, score: data.newScore };
+          }
+          return prev;
+        });
+      }
+    };
+
     socket.on("question-revealed", handleQuestionRevealed);
     socket.on("buzzer-queue-update", handleBuzzerQueueUpdate);
     socket.on("answer-result", handleAnswerResult);
+    socket.on("score-update", handleScoreUpdate);
 
     return () => {
       socket.off("question-revealed", handleQuestionRevealed);
       socket.off("buzzer-queue-update", handleBuzzerQueueUpdate);
       socket.off("answer-result", handleAnswerResult);
+      socket.off("score-update", handleScoreUpdate);
     };
   }, [socket, contestant, setCurrentQuestion, setBuzzerQueue]);
 
