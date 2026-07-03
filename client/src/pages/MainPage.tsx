@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useGameStore } from "@/store/gameStore";
 import { useSocketStore } from "@/store/socketStore";
 import { gameApi, quizApi, contestantApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Game, Quiz } from "../../../shared/types/index.js";
 
-type MonitorView = "grid" | "question" | "leaderboard" | "photo";
+type MonitorView = "grid" | "question" | "leaderboard" | "photo" | "score-update";
 
 interface PhotoDisplayData {
   contestantId: string;
@@ -17,6 +17,13 @@ interface PhotoDisplayData {
 function MainPage() {
   const [view, setView] = useState<MonitorView>("grid");
   const [photoDisplay, setPhotoDisplay] = useState<PhotoDisplayData | null>(null);
+  const [scoreDisplay, setScoreDisplay] = useState<{
+    contestantName: string;
+    newScore: number;
+    action?: "deduct" | "award";
+    amount: number;
+  } | null>(null);
+  const scoreDisplayTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     game,
@@ -196,12 +203,46 @@ function MainPage() {
       setLeaderboard(data.leaderboard);
     };
 
-    const handleScoreUpdate = (data: { contestantId: string; newScore: number }) => {
+    const handleScoreUpdate = (data: { contestantId: string; newScore: number; action?: "deduct" | "award"; isManual?: boolean }) => {
       // Update contestant score in store
       const updatedContestants = contestants.map((c) =>
         c.id === data.contestantId ? { ...c, score: data.newScore } : c
       );
       setContestants(updatedContestants);
+
+      // Only show full-screen for manual adjustments, not for automatic score updates from correct answers
+      if (data.isManual) {
+        const oldScore = contestants.find((c) => c.id === data.contestantId)?.score || 0;
+        const amount = Math.abs(data.newScore - oldScore);
+        const contestant = updatedContestants.find((c) => c.id === data.contestantId);
+
+        if (contestant) {
+          setScoreDisplay({
+            contestantName: contestant.name,
+            newScore: data.newScore,
+            action: data.action || "award",
+            amount,
+          });
+
+          setView("score-update");
+
+          // Clear previous timer if exists
+          if (scoreDisplayTimerRef.current) {
+            clearTimeout(scoreDisplayTimerRef.current);
+          }
+
+          // Auto-return to leaderboard after 2 seconds
+          scoreDisplayTimerRef.current = setTimeout(() => {
+            setView("leaderboard");
+            setScoreDisplay(null);
+
+            // After 3 seconds on leaderboard, return to grid
+            setTimeout(() => {
+              setView("grid");
+            }, 3000);
+          }, 2000);
+        }
+      }
     };
 
     const handleGameUpdate = (data: { game: Game }) => {
@@ -266,6 +307,9 @@ function MainPage() {
       )}
       {view === "photo" && photoDisplay && (
         <PhotoView photoDisplay={photoDisplay} />
+      )}
+      {view === "score-update" && scoreDisplay && (
+        <ScoreUpdateView scoreDisplay={scoreDisplay} />
       )}
     </div>
   );
@@ -667,6 +711,52 @@ function PhotoView({ photoDisplay }: { photoDisplay: PhotoDisplayData }) {
           }}>
             +{photoDisplay.points} Points!
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Score Update View Component
+function ScoreUpdateView({
+  scoreDisplay,
+}: {
+  scoreDisplay: {
+    contestantName: string;
+    newScore: number;
+    action?: "deduct" | "award";
+    amount: number;
+  };
+}) {
+  const isDeduction = scoreDisplay.action === "deduct";
+
+  return (
+    <div className={`min-h-screen flex items-center justify-center ${
+      isDeduction
+        ? "bg-gradient-to-br from-red-500 via-red-600 to-red-700"
+        : "bg-gradient-to-br from-green-500 via-green-600 to-green-700"
+    }`}>
+      <div className="text-center">
+        <div className="mb-8 text-9xl animate-bounce">
+          {isDeduction ? "⚠️" : "🎉"}
+        </div>
+        <div className="text-6xl font-bold mb-4 text-white drop-shadow-lg">
+          {scoreDisplay.contestantName}
+        </div>
+        <div className="text-5xl font-bold mb-8 text-white drop-shadow-lg">
+          {isDeduction ? "Points Deducted" : "Points Awarded"}
+        </div>
+        <div className={`text-9xl font-bold drop-shadow-2xl ${
+          isDeduction ? "text-red-200" : "text-yellow-200"
+        }`} style={{
+          textShadow: isDeduction
+            ? '0 0 40px rgba(255, 0, 0, 0.8), 0 0 80px rgba(255, 0, 0, 0.6)'
+            : '0 0 40px rgba(234, 179, 8, 0.8), 0 0 80px rgba(234, 179, 8, 0.6)'
+        }}>
+          {isDeduction ? "-" : "+"}{scoreDisplay.amount}
+        </div>
+        <div className="text-4xl font-bold mt-12 text-white drop-shadow-lg">
+          New Score: {scoreDisplay.newScore}
         </div>
       </div>
     </div>

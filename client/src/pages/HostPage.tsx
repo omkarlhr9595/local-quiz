@@ -9,6 +9,7 @@ import { BuzzerQueue } from "@/components/host/BuzzerQueue";
 import { AnswerControls } from "@/components/host/AnswerControls";
 import { Leaderboard } from "@/components/host/Leaderboard";
 import { QuestionPointOverride } from "@/components/host/QuestionPointOverride";
+import { ScoreAdjustment } from "@/components/host/ScoreAdjustment";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -525,6 +526,16 @@ function HostGamePage() {
           {/* Answer Controls */}
           <div className="bg-white rounded-lg shadow p-4">
             <AnswerControls />
+          </div>
+
+          {/* Score Adjustment */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-4 border-b">
+              <h3 className="font-semibold">Adjust Scores</h3>
+            </div>
+            <div className="p-4">
+              <ScoreAdjustment />
+            </div>
           </div>
 
           {/* Leaderboard */}

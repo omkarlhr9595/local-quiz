@@ -13,6 +13,7 @@ import {
   handleGameResume,
   handleGameReset,
 } from "./handlers/game.handler.js";
+import { handleDeductScore, handleAwardScore } from "./handlers/score.handler.js";
 
 export const setupSocketIO = (io: Server) => {
   io.on("connection", (socket) => {
@@ -131,6 +132,36 @@ export const setupSocketIO = (io: Server) => {
         payload.questionIndex,
         payload.contestantId,
         payload.points
+      );
+    });
+
+    socket.on("host-deduct-score", async (payload) => {
+      const { gameId, role } = socket.data;
+      if (!gameId || role !== "host") {
+        socket.emit("error", { message: "Only host can deduct scores" });
+        return;
+      }
+
+      await handleDeductScore(
+        socket,
+        payload.gameId,
+        payload.contestantId,
+        payload.amount
+      );
+    });
+
+    socket.on("host-award-score", async (payload) => {
+      const { gameId, role } = socket.data;
+      if (!gameId || role !== "host") {
+        socket.emit("error", { message: "Only host can award scores" });
+        return;
+      }
+
+      await handleAwardScore(
+        socket,
+        payload.gameId,
+        payload.contestantId,
+        payload.amount
       );
     });
 

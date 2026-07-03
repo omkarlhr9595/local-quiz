@@ -162,7 +162,7 @@ export interface ServerToClientEvents {
     isCorrect: boolean;
     points: number;
   }) => void;
-  "score-update": (data: { contestantId: string; newScore: number }) => void;
+  "score-update": (data: { contestantId: string; newScore: number; action?: "deduct" | "award"; isManual?: boolean }) => void;
   "leaderboard-update": (data: {
     leaderboard: Array<{
       contestantId: string;
@@ -188,6 +188,8 @@ export interface ClientToServerEvents {
   "host-answer-confirm": (payload: HostAnswerConfirmPayload) => void;
   "host-mark-question-done": (payload: HostMarkQuestionDonePayload) => void;
   "host-manual-award-points": (payload: HostManualAwardPointsPayload) => void;
+  "host-deduct-score": (payload: { gameId: string; contestantId: string; amount: number; action: "deduct" }) => void;
+  "host-award-score": (payload: { gameId: string; contestantId: string; amount: number; action: "award" }) => void;
   "game-pause": (payload: GameControlPayload) => void;
   "game-resume": (payload: GameControlPayload) => void;
   "game-reset": (payload: GameControlPayload) => void;
