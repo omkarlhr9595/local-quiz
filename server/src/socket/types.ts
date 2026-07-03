@@ -6,6 +6,10 @@ import type {
   HostAnswerConfirmPayload,
   GameControlPayload,
   Game,
+  QuestionType,
+  QuestionOption,
+  HostMarkQuestionDonePayload,
+  HostManualAwardPointsPayload,
 } from "../../../shared/types/index.js";
 
 export interface SocketData {
@@ -25,7 +29,12 @@ export interface ServerToClientEvents {
     question: string;
     points: number;
     category: string;
+    imageUrl?: string;
+    type?: QuestionType;
+    options?: QuestionOption[];
+    correctOptionId?: string;
   }) => void;
+  "mcq-answer-revealed": (data: { correctOptionId: string }) => void;
   "buzzer-queue-update": (data: {
     queue: Array<{ contestantId: string; timestamp: number }>;
     currentAnswering: string | null;
@@ -56,10 +65,15 @@ export interface ClientToServerEvents {
   "leave-room": (payload: { gameId: string }) => void;
   "select-question": (payload: SelectQuestionPayload) => void;
   "host-reveal-question": (payload: HostRevealQuestionPayload) => void;
+  "host-reveal-mcq-answer": (payload: { gameId: string }) => void;
   "buzzer-press": (payload: BuzzerPressPayload) => void;
   "host-answer-confirm": (payload: HostAnswerConfirmPayload) => void;
+  "host-mark-question-done": (payload: HostMarkQuestionDonePayload) => void;
+  "host-manual-award-points": (payload: HostManualAwardPointsPayload) => void;
   "game-pause": (payload: GameControlPayload) => void;
   "game-resume": (payload: GameControlPayload) => void;
   "game-reset": (payload: GameControlPayload) => void;
+  "main-monitor-view": (payload: { gameId: string; view: "grid" | "question" | "leaderboard" | "photo" }) => void;
+  "main-monitor-sound": (payload: { gameId: string; muted: boolean }) => void;
 }
 

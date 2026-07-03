@@ -111,61 +111,6 @@ router.get("/:id", async (req, res) => {
 });
 
 /**
- * PUT /api/games/:id/pause
- * Pause or resume game
- */
-router.put("/:id/pause", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { paused } = req.body;
-
-    if (typeof paused !== "boolean") {
-      res.status(400).json({
-        success: false,
-        error: "Missing or invalid 'paused' field (must be boolean)",
-      } as ApiResponse<null>);
-      return;
-    }
-
-    const status: GameStatus = paused ? "paused" : "active";
-    const game = await gameService.updateGame(id, { status });
-
-    res.json({ success: true, data: game } as ApiResponse<typeof game>);
-  } catch (error) {
-    console.error("Error updating game status:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to update game status",
-    } as ApiResponse<null>);
-  }
-});
-
-/**
- * PUT /api/games/:id/reset
- * Reset game state
- */
-router.put("/:id/reset", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const game = await gameService.updateGame(id, {
-      status: "waiting",
-      currentQuestion: null,
-      buzzerQueue: [],
-      answeredQuestions: [],
-    });
-
-    res.json({ success: true, data: game } as ApiResponse<typeof game>);
-  } catch (error) {
-    console.error("Error resetting game:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to reset game",
-    } as ApiResponse<null>);
-  }
-});
-
-/**
  * PUT /api/games/:id/activate
  * Activate a game (deactivates all other games)
  */

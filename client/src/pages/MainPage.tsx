@@ -36,7 +36,6 @@ function MainPage() {
 
   const loadGameData = useCallback(async () => {
     try {
-      // Load active game
       const gameResponse = await gameApi.getActive();
       if (gameResponse.data.success) {
         const gameData = gameResponse.data.data;
@@ -116,7 +115,7 @@ function MainPage() {
   // Join room when socket and game are ready
   useEffect(() => {
     if (socket && game) {
-      joinRoom(game.id, "contestant"); // Main monitor acts as a spectator
+      joinRoom(game.id, "contestant");
     }
   }, [socket, game, joinRoom]);
 
@@ -132,13 +131,23 @@ function MainPage() {
       question: string;
       points: number;
       category: string;
+      imageUrl?: string;
+      type?: "text" | "mcq";
+      options?: Array<{ id: string; text: string }>;
     }) => {
       setCurrentQuestion({
         question: data.question,
         points: data.points,
         category: data.category,
+        imageUrl: data.imageUrl,
+        type: data.type,
+        options: data.options,
       });
       setView("question");
+    };
+
+    const handleMcqAnswerRevealed = (data: { correctOptionId: string }) => {
+      // Handle MCQ answer reveal
     };
 
     const handleAnswerResult = (data: {
@@ -203,6 +212,7 @@ function MainPage() {
 
     socket.on("main-monitor-view", handleMainMonitorView);
     socket.on("question-revealed", handleQuestionRevealed);
+    socket.on("mcq-answer-revealed", handleMcqAnswerRevealed);
     socket.on("answer-result", handleAnswerResult);
     socket.on("leaderboard-update", handleLeaderboardUpdate);
     socket.on("score-update", handleScoreUpdate);
@@ -211,6 +221,7 @@ function MainPage() {
     return () => {
       socket.off("main-monitor-view", handleMainMonitorView);
       socket.off("question-revealed", handleQuestionRevealed);
+      socket.off("mcq-answer-revealed", handleMcqAnswerRevealed);
       socket.off("answer-result", handleAnswerResult);
       socket.off("leaderboard-update", handleLeaderboardUpdate);
       socket.off("score-update", handleScoreUpdate);
@@ -279,7 +290,7 @@ function GridView({
         <div className="flex justify-between items-start mb-12">
           <div className="flex-1" />
           <h1 className="text-7xl font-bold text-center flex-1">
-            <span className="bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 bg-clip-text text-transparent">
+            <span className="text-pink-600">
               {quiz.name || "General Knowledge Quiz"}
             </span>
           </h1>
@@ -351,45 +362,70 @@ function GridView({
 }
 
 // Question View Component
-function QuestionView({ question }: { question: { question: string; points: number; category: string } }) {
+function QuestionView({ question }: { question: any }) {
+  const { revealedCorrectOptionId } = useGameStore();
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-12 bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100">
-      <div className="max-w-6xl w-full text-center">
-        {/* Category Badge */}
-        <div className="mb-12">
-          <div className="inline-block px-12 py-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 text-white text-3xl font-semibold shadow-xl mb-8">
-            {question.category}
+    <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100">
+      {/* Category & Points - Compact Header */}
+      <div className="flex gap-4 mb-6">
+        <div className="px-8 py-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xl font-semibold shadow-lg">
+          {question.category}
+        </div>
+        <div className="px-8 py-2 rounded-xl bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-2xl font-bold shadow-lg">
+          {question.points} pts
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="w-full max-w-6xl">
+        {/* Question Image - Takes up to 40% of space */}
+        {question.imageUrl && (
+          <div className="mb-6 rounded-2xl overflow-hidden shadow-xl">
+            <img
+              src={question.imageUrl}
+              alt="Question"
+              className="w-full max-h-[50vh] object-cover"
+            />
+          </div>
+        )}
+
+        {/* Question Text - Compact */}
+        <div className="relative mb-6 p-8 bg-blue-800 rounded-2xl shadow-xl border-4 border-yellow-400">
+          <div className="text-4xl font-bold text-white text-center leading-tight">
+            {question.question}
           </div>
         </div>
-        
-        {/* Points Display */}
-        <div className="mb-16">
-          <div className="inline-block px-16 py-6 rounded-2xl bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-7xl font-bold shadow-xl">
-            {question.points} pts
+
+        {/* MCQ Options Grid - Responsive */}
+        {question.type === "mcq" && question.options && (
+          <div className="grid grid-cols-2 gap-4">
+            {question.options.map((option: any) => {
+              const isCorrect = revealedCorrectOptionId === option.id;
+              return (
+                <div
+                  key={option.id}
+                  className={`p-6 rounded-2xl text-xl font-bold shadow-lg transition-all flex items-center justify-center text-center min-h-24 ${
+                    isCorrect
+                      ? "bg-green-500 text-white ring-4 ring-green-300"
+                      : revealedCorrectOptionId
+                      ? "bg-gray-400 text-gray-700 opacity-50"
+                      : "bg-blue-500 text-white"
+                  }`}
+                >
+                  {option.text}
+                </div>
+              );
+            })}
           </div>
-        </div>
-        
-        {/* Question Box with Corner Brackets */}
-        <div className="relative">
-          <div className="relative bg-blue-800 p-16 rounded-3xl shadow-2xl">
-            {/* Corner Brackets */}
-            <div className="absolute top-0 left-0 w-16 h-16 border-t-4 border-l-4 border-yellow-400 rounded-tl-3xl" />
-            <div className="absolute top-0 right-0 w-16 h-16 border-t-4 border-r-4 border-yellow-400 rounded-tr-3xl" />
-            <div className="absolute bottom-0 left-0 w-16 h-16 border-b-4 border-l-4 border-yellow-400 rounded-bl-3xl" />
-            <div className="absolute bottom-0 right-0 w-16 h-16 border-b-4 border-r-4 border-yellow-400 rounded-br-3xl" />
-            
-            <div className="text-6xl font-semibold leading-tight text-white">
-              {question.question}
-            </div>
-          </div>
-        </div>
-        
-        {/* Progress Dots */}
-        <div className="flex justify-center gap-4 mt-12">
-          <div className="w-4 h-4 rounded-full bg-yellow-400 shadow-lg" />
-          <div className="w-4 h-4 rounded-full bg-yellow-400 shadow-lg" />
-          <div className="w-4 h-4 rounded-full bg-yellow-400 shadow-lg" />
-        </div>
+        )}
+      </div>
+
+      {/* Progress Dots */}
+      <div className="flex justify-center gap-3 mt-8">
+        <div className="w-3 h-3 rounded-full bg-yellow-400 shadow-lg" />
+        <div className="w-3 h-3 rounded-full bg-yellow-400 shadow-lg" />
+        <div className="w-3 h-3 rounded-full bg-yellow-400 shadow-lg" />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { Category } from "../../../shared/types/index.js";
 
 // Get the backend URL - use environment variable if set, otherwise detect from current hostname
 const getApiBaseUrl = () => {
@@ -38,12 +39,17 @@ api.interceptors.request.use((config) => {
 
 // Quiz API
 export const quizApi = {
-  create: (data: { name: string; categories: any[] }) =>
+  create: (data: { name: string; categories: Category[] }) =>
     api.post("/quizzes", data),
-  update: (id: string, data: { name: string; categories: any[] }) =>
+  update: (id: string, data: { name: string; categories: Category[] }) =>
     api.put(`/quizzes/${id}`, data),
   getById: (id: string) => api.get(`/quizzes/${id}`),
   getAll: () => api.get("/quizzes"),
+  uploadQuestionImage: (file: File) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    return api.post<{ success: boolean; data: { imageUrl: string } }>("/quizzes/images", formData);
+  },
 };
 
 // Game API
@@ -54,9 +60,6 @@ export const gameApi = {
   getById: (id: string) => api.get(`/games/${id}`),
   getActive: () => api.get("/games/active"),
   activate: (id: string) => api.put(`/games/${id}/activate`),
-  pause: (id: string, paused: boolean) =>
-    api.put(`/games/${id}/pause`, { paused }),
-  reset: (id: string) => api.put(`/games/${id}/reset`),
   delete: (id: string) => api.delete(`/games/${id}`),
 };
 

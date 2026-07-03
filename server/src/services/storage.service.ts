@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import os from "os";
+import { randomUUID } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -168,3 +169,42 @@ export const deleteContestantPhoto = async (
   }
 };
 
+interface UploadQuestionImageParams {
+  file: Express.Multer.File;
+}
+
+/**
+ * Upload question image to local storage
+ * Uses content-addressing (UUID) so images can be uploaded before quiz is saved
+ * @param params - Upload parameters
+ * @returns Public URL of uploaded image
+ */
+export const uploadQuestionImage = async ({
+  file,
+}: UploadQuestionImageParams): Promise<string> => {
+  try {
+    const fileExtension = path.extname(file.originalname);
+    const uploadsDir = getUploadsDir();
+    const quizImagesDir = path.join(uploadsDir, "quiz-images");
+    const fileName = `${randomUUID()}${fileExtension}`;
+    const filePath = path.join(quizImagesDir, fileName);
+
+    // Create directory if it doesn't exist
+    await fs.mkdir(quizImagesDir, { recursive: true });
+
+    // Write file to disk
+    await fs.writeFile(filePath, file.buffer);
+
+    // Generate public URL
+    const baseUrl = getBaseUrl();
+    const publicUrl = `${baseUrl}/uploads/quiz-images/${fileName}`;
+
+    console.log(`✅ Question image uploaded: ${filePath}`);
+    console.log(`   Public URL: ${publicUrl}`);
+
+    return publicUrl;
+  } catch (error) {
+    console.error("Error uploading question image to local storage:", error);
+    throw new Error("Failed to upload question image");
+  }
+};

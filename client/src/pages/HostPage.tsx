@@ -26,6 +26,7 @@ import {
 import { useGameStore } from "@/store/gameStore";
 import { useSocketStore } from "@/store/socketStore";
 import { gameApi, quizApi, contestantApi } from "@/lib/api";
+import type { GameStatus, Contestant, Game as GameType } from "@shared/types";
 import buzzerSound from "@/assets/Bell Ding Sound EFFECT.mp3";
 
 function HostGamePage() {
@@ -104,27 +105,19 @@ function HostGamePage() {
         try {
           const contestantsResponse = await contestantApi.getByGameId(gameData.id);
           if (contestantsResponse.data.success) {
-            const contestants = contestantsResponse.data.data;
+            const contestants: Contestant[] = contestantsResponse.data.data;
             // Store contestants in the game store so they can be accessed by BuzzerQueue
-            setContestants(contestants.map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              photoUrl: c.photoUrl || "",
-              gameId: c.gameId,
-              score: c.score || 0,
-              route: c.route,
-              createdAt: c.createdAt,
-            })));
+            setContestants(contestants);
             const sorted = contestants
-              .map((c: any, index: number) => ({
+              .map((c, index) => ({
                 contestantId: c.id,
                 name: c.name,
                 photoUrl: c.photoUrl,
-                score: c.score || 0,
+                score: c.score,
                 position: index + 1,
               }))
-              .sort((a: any, b: any) => b.score - a.score)
-              .map((c: any, index: number) => ({ ...c, position: index + 1 }));
+              .sort((a, b) => b.score - a.score)
+              .map((c, index) => ({ ...c, position: index + 1 }));
             setLeaderboard(sorted);
           }
         } catch (error) {
@@ -177,36 +170,19 @@ function HostGamePage() {
     });
 
     socket.on("buzzer-queue-update", (data) => {
-      console.log(`\n[HOST] ========== QUEUE UPDATE RECEIVED ==========`);
-      console.log(`[HOST] Queue size: ${data.queue.length}`);
-      console.log(`[HOST] Current answering: ${data.currentAnswering || "none"}`);
-      console.log(`[HOST] Queue order:`);
-      data.queue.forEach((entry, index) => {
-        console.log(
-          `[HOST]   [${index + 1}] Contestant: ${entry.contestantId}, Timestamp: ${entry.timestamp} (${new Date(entry.timestamp).toISOString()})`
-        );
-      });
-      console.log(`[HOST] ========== UPDATE COMPLETE ==========\n`);
-      
-      // Check if someone new became first in queue
       const newFirstContestant = data.queue.length > 0 ? data.queue[0].contestantId : null;
       const previousFirstContestant = previousFirstContestantRef.current;
-      
-      // Play sound if someone new became first (queue was empty and now has someone, or first person changed)
+
       if (newFirstContestant && newFirstContestant !== previousFirstContestant) {
-        console.log(`[HOST] New first in queue: ${newFirstContestant} - Playing sound`);
         if (buzzerSoundRef.current) {
-          // Reset audio to beginning and play
           buzzerSoundRef.current.currentTime = 0;
           buzzerSoundRef.current.play().catch((error) => {
             console.error("Error playing buzzer sound:", error);
           });
         }
       }
-      
-      // Update the ref to track the new first contestant
+
       previousFirstContestantRef.current = newFirstContestant;
-      
       setBuzzerQueue(data.queue, data.currentAnswering);
     });
 
@@ -219,10 +195,6 @@ function HostGamePage() {
     });
 
     socket.on("answer-result", (data) => {
-      // Handle answer result if needed
-      console.log("Answer result:", data);
-      // If answer is correct, clear current question and selected question
-      // so host can select the next question
       if (data.isCorrect) {
         setCurrentQuestion(null);
         setSelectedQuestion(null);
@@ -239,6 +211,11 @@ function HostGamePage() {
       }
     });
 
+    socket.on("game-state-change", (data) => {
+      // Update game status when pause/resume/reset occurs
+      setGame(game ? { ...game, status: (data as { status: GameStatus }).status } : game);
+    });
+
     return () => {
       socket.off("question-revealed");
       socket.off("buzzer-queue-update");
@@ -246,14 +223,15 @@ function HostGamePage() {
       socket.off("leaderboard-update");
       socket.off("answer-result");
       socket.off("game-update");
+      socket.off("game-state-change");
     };
-  }, [socket, setCurrentQuestion, setBuzzerQueue, setLeaderboard, updateContestantScore]);
+  }, [socket, game, setGame, setCurrentQuestion, setBuzzerQueue, setLeaderboard, updateContestantScore]);
 
   const handleCardSelect = (categoryIndex: number, questionIndex: number) => {
     setSelectedQuestion({ categoryIndex, questionIndex });
   };
 
-  const [games, setGames] = useState<any[]>([]);
+  const [games, setGames] = useState<GameType[]>([]);
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [gameToDelete, setGameToDelete] = useState<string | null>(null);
@@ -292,16 +270,8 @@ function HostGamePage() {
         try {
           const contestantsResponse = await contestantApi.getByGameId(gameData.id);
           if (contestantsResponse.data.success) {
-            const contestants = contestantsResponse.data.data;
-            setContestants(contestants.map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              photoUrl: c.photoUrl || "",
-              gameId: c.gameId,
-              score: c.score || 0,
-              route: c.route,
-              createdAt: c.createdAt,
-            })));
+            const contestants: Contestant[] = contestantsResponse.data.data;
+            setContestants(contestants);
           }
         } catch (error) {
           console.error("Error loading contestants:", error);
@@ -484,10 +454,7 @@ function HostGamePage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {game && (
-              <div className="flex items-center gap-2">
-                <Badge className="bg-green-600">ACTIVE</Badge>
-                <span className="text-sm">Game: {game.id.slice(0, 8)}...</span>
-              </div>
+              <span className="text-sm">Game: {game.id.slice(0, 8)}...</span>
             )}
             {quiz && <span className="text-sm">Quiz: {quiz.name}</span>}
             {game && game.status !== "active" && (

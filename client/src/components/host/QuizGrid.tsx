@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useGameStore } from "@/store/gameStore";
-import { useSocketStore } from "@/store/socketStore";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Image as ImageIcon } from "lucide-react";
 
 interface QuizGridProps {
   onCardSelect: (categoryIndex: number, questionIndex: number) => void;
@@ -93,10 +93,23 @@ export function QuizGrid({ onCardSelect }: QuizGridProps) {
                   )}
                   onClick={() => handleCardClick(catIdx, qIdx)}
                 >
-                  <div className="text-center">
+                  <div className="text-center space-y-2">
                     <Badge variant="secondary" className="text-lg font-bold">
                       {question.points}
                     </Badge>
+
+                    {/* Type and Image Indicators */}
+                    <div className="flex items-center justify-center gap-1 min-h-5">
+                      {question.type === "mcq" && (
+                        <Badge variant="outline" className="text-xs">
+                          MCQ
+                        </Badge>
+                      )}
+                      {question.imageUrl && (
+                        <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </div>
+
                     {isSelected && (
                       <div className="mt-2 text-xs text-yellow-600">
                         Selected

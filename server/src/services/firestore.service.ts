@@ -264,8 +264,22 @@ export const gameService = {
    */
   async updateGame(gameId: string, updates: Partial<Game>): Promise<Game> {
     const gameRef = db.collection("games").doc(gameId);
+    const cleanUpdates = (obj: any): any => {
+      if (obj === null || obj === undefined) return undefined;
+      if (typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(cleanUpdates).filter(v => v !== undefined);
+      const result: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const cleaned = cleanUpdates(value);
+        if (cleaned !== undefined) {
+          result[key] = cleaned;
+        }
+      }
+      return Object.keys(result).length > 0 ? result : undefined;
+    };
+
     const updateData = {
-      ...updates,
+      ...cleanUpdates(updates),
       updatedAt: new Date().toISOString(),
     };
 

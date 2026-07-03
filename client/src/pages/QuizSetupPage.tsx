@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { HostNavigation } from "@/components/host/HostNavigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -11,8 +10,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { QuizForm } from "@/components/quiz-editor/QuizForm";
 import { quizApi } from "@/lib/api";
-import type { Quiz, Category, Question } from "../../../shared/types/index.js";
+import type { Quiz, Category } from "../../../shared/types/index.js";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
+
+interface SaveMessage {
+  type: "success" | "error";
+  text: string;
+}
 
 export default function QuizSetupPage() {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -20,6 +26,8 @@ export default function QuizSetupPage() {
   const [quizName, setQuizName] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<SaveMessage | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     loadQuizzes();
@@ -54,6 +62,7 @@ export default function QuizSetupPage() {
       }
     } catch (error) {
       console.error("Error loading quiz:", error);
+      setSaveMessage({ type: "error", text: "Failed to load quiz" });
     }
   };
 
@@ -65,314 +74,186 @@ export default function QuizSetupPage() {
   const handleNewQuiz = () => {
     setSelectedQuizId(null);
     resetForm();
+    setSaveMessage(null);
   };
 
-  const handleAddCategory = () => {
-    setCategories([
-      ...categories,
-      {
-        name: "",
-        questions: [],
-      },
-    ]);
-  };
-
-  const handleDeleteCategory = (index: number) => {
-    setCategories(categories.filter((_, i) => i !== index));
-  };
-
-  const handleCategoryNameChange = (index: number, name: string) => {
-    const updated = [...categories];
-    updated[index].name = name;
-    setCategories(updated);
-  };
-
-  const handleAddQuestion = (categoryIndex: number) => {
-    const updated = [...categories];
-    updated[categoryIndex].questions.push({
-      points: 100,
-      question: "",
-      answer: "",
-    });
-    setCategories(updated);
-  };
-
-  const handleDeleteQuestion = (categoryIndex: number, questionIndex: number) => {
-    const updated = [...categories];
-    updated[categoryIndex].questions = updated[categoryIndex].questions.filter(
-      (_, i) => i !== questionIndex
-    );
-    setCategories(updated);
-  };
-
-  const handleQuestionChange = (
-    categoryIndex: number,
-    questionIndex: number,
-    field: keyof Question,
-    value: string | number
-  ) => {
-    const updated = [...categories];
-    updated[categoryIndex].questions[questionIndex] = {
-      ...updated[categoryIndex].questions[questionIndex],
-      [field]: value,
-    };
-    setCategories(updated);
-  };
-
-  const handleSave = async () => {
+  const validateForm = (): string | null => {
     if (!quizName.trim()) {
-      alert("Please enter a quiz name");
-      return;
+      return "Please enter a quiz name";
     }
 
     if (categories.length === 0) {
-      alert("Please add at least one category");
-      return;
+      return "Please add at least one category";
     }
 
     for (const category of categories) {
       if (!category.name.trim()) {
-        alert("All categories must have a name");
-        return;
+        return "All categories must have a name";
       }
       if (category.questions.length === 0) {
-        alert(`Category "${category.name}" must have at least one question`);
-        return;
+        return `Category "${category.name}" must have at least one question`;
       }
       for (const question of category.questions) {
-        if (!question.question.trim() || !question.answer.trim()) {
-          alert("All questions must have both question and answer text");
-          return;
+        if (!question.question.trim()) {
+          return "All questions must have question text";
+        }
+        if (question.type === "mcq") {
+          if (!question.options || question.options.length < 2) {
+            return "MCQ questions must have at least 2 options";
+          }
+          if (!question.correctOptionId) {
+            return "MCQ questions must have a correct answer selected";
+          }
+        } else {
+          if (!question.answer.trim()) {
+            return "Text questions must have an answer";
+          }
         }
         if (question.points <= 0) {
-          alert("All questions must have positive point values");
-          return;
+          return "All questions must have positive point values";
         }
       }
+    }
+
+    return null;
+  };
+
+  const handleSave = async () => {
+    const validationError = validateForm();
+    if (validationError) {
+      setSaveMessage({ type: "error", text: validationError });
+      return;
     }
 
     setLoading(true);
     try {
       const quizData = {
         name: quizName,
-        categories: categories.map((cat) => ({
-          name: cat.name,
-          questions: cat.questions.map((q) => ({
-            points: typeof q.points === "number" ? q.points : parseInt(String(q.points), 10),
-            question: q.question,
-            answer: q.answer,
-          })),
-        })),
+        categories,
       };
 
       if (selectedQuizId) {
-        // Update existing quiz
         await quizApi.update(selectedQuizId, quizData);
-        alert("Quiz updated successfully!");
+        setSaveMessage({ type: "success", text: "Quiz updated successfully!" });
       } else {
-        // Create new quiz
         await quizApi.create(quizData);
-        alert("Quiz created successfully!");
+        setSaveMessage({ type: "success", text: "Quiz created successfully!" });
       }
 
       await loadQuizzes();
-      handleNewQuiz();
+      setTimeout(() => handleNewQuiz(), 1500);
     } catch (error) {
       console.error("Error saving quiz:", error);
-      alert(selectedQuizId ? "Failed to update quiz" : "Failed to create quiz");
+      setSaveMessage({
+        type: "error",
+        text: selectedQuizId ? "Failed to update quiz" : "Failed to create quiz",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async () => {
+  const handleConfirmDelete = async () => {
     if (!selectedQuizId) return;
-    if (!confirm("Are you sure you want to delete this quiz?")) return;
-
-    // TODO: Add delete API endpoint
-    alert("Delete functionality coming soon");
+    setShowDeleteConfirm(false);
+    // TODO: Implement delete once endpoint is available
+    setSaveMessage({ type: "error", text: "Delete functionality coming soon" });
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <HostNavigation />
 
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="space-y-6">
-          {/* Quiz Management */}
-          <Card className="p-6">
-            <div className="flex items-center gap-4 mb-4">
-              <Select
-                value={selectedQuizId || ""}
-                onValueChange={(value) => setSelectedQuizId(value || null)}
+          {/* Save Message Banner */}
+          {saveMessage && (
+            <div
+              className={`p-4 rounded-lg flex items-center gap-3 ${
+                saveMessage.type === "success"
+                  ? "bg-green-50 border border-green-200 text-green-900"
+                  : "bg-red-50 border border-red-200 text-red-900"
+              }`}
+            >
+              {saveMessage.type === "success" ? (
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              )}
+              <p className="text-sm font-medium flex-1">{saveMessage.text}</p>
+              <button
+                onClick={() => setSaveMessage(null)}
+                className="text-xs opacity-60 hover:opacity-100"
               >
-                <SelectTrigger className="w-[300px]">
-                  <SelectValue placeholder="Select Quiz" />
-                </SelectTrigger>
-                <SelectContent>
-                  {quizzes.map((quiz) => (
-                    <SelectItem key={quiz.id} value={quiz.id}>
-                      {quiz.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button onClick={handleNewQuiz}>+ New Quiz</Button>
-              {selectedQuizId && (
-                <>
-                  <Button variant="outline" onClick={handleDelete}>
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Quiz Management */}
+          <Card className="p-4 flex items-center gap-4">
+            <Select
+              value={selectedQuizId || ""}
+              onValueChange={(value) => setSelectedQuizId(value || null)}
+            >
+              <SelectTrigger className="w-[300px]">
+                <SelectValue placeholder="Select Quiz" />
+              </SelectTrigger>
+              <SelectContent>
+                {quizzes.map((quiz) => (
+                  <SelectItem key={quiz.id} value={quiz.id}>
+                    {quiz.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={handleNewQuiz} variant="outline">
+              + New Quiz
+            </Button>
+            {selectedQuizId && (
+              <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive">
                     Delete
                   </Button>
-                </>
-              )}
-            </div>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogTitle>Delete Quiz?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this quiz? This action cannot be undone.
+                  </AlertDialogDescription>
+                  <div className="flex gap-2 justify-end">
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive">
+                      Delete
+                    </AlertDialogAction>
+                  </div>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </Card>
 
           {/* Quiz Form */}
           <Card className="p-6">
-            <div className="space-y-6">
-              <div>
-                <Label htmlFor="quiz-name" className="text-lg font-semibold">
-                  Quiz Name
-                </Label>
-                <Input
-                  id="quiz-name"
-                  value={quizName}
-                  onChange={(e) => setQuizName(e.target.value)}
-                  placeholder="Enter quiz name"
-                  className="mt-2"
-                />
-              </div>
+            <QuizForm
+              quizName={quizName}
+              categories={categories}
+              onQuizNameChange={setQuizName}
+              onCategoriesChange={setCategories}
+            />
 
-              {/* Categories */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-lg font-semibold">Categories</Label>
-                  <Button onClick={handleAddCategory} variant="outline">
-                    + Add Category
-                  </Button>
-                </div>
-
-                {categories.map((category, catIndex) => (
-                  <Card key={catIndex} className="p-4 border-2">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={category.name}
-                          onChange={(e) =>
-                            handleCategoryNameChange(catIndex, e.target.value)
-                          }
-                          placeholder="Category name"
-                          className="flex-1"
-                        />
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteCategory(catIndex)}
-                        >
-                          Delete Category
-                        </Button>
-                      </div>
-
-                      {/* Questions */}
-                      <div className="space-y-3 pl-4 border-l-2">
-                        {category.questions.map((question, qIndex) => (
-                          <Card key={qIndex} className="p-3 bg-gray-50">
-                            <div className="grid grid-cols-12 gap-3">
-                              <div className="col-span-2">
-                                <Label className="text-xs">Points</Label>
-                                <Input
-                                  type="number"
-                                  value={question.points}
-                                  onChange={(e) =>
-                                    handleQuestionChange(
-                                      catIndex,
-                                      qIndex,
-                                      "points",
-                                      parseInt(e.target.value, 10) || 0
-                                    )
-                                  }
-                                  className="mt-1"
-                                />
-                              </div>
-                              <div className="col-span-8">
-                                <Label className="text-xs">Question</Label>
-                                <Input
-                                  value={question.question}
-                                  onChange={(e) =>
-                                    handleQuestionChange(
-                                      catIndex,
-                                      qIndex,
-                                      "question",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="Enter question"
-                                  className="mt-1"
-                                />
-                              </div>
-                              <div className="col-span-2">
-                                <Label className="text-xs">Answer</Label>
-                                <Input
-                                  value={question.answer}
-                                  onChange={(e) =>
-                                    handleQuestionChange(
-                                      catIndex,
-                                      qIndex,
-                                      "answer",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="Enter answer"
-                                  className="mt-1"
-                                />
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() =>
-                                  handleDeleteQuestion(catIndex, qIndex)
-                                }
-                              >
-                                Delete Question
-                              </Button>
-                            </div>
-                          </Card>
-                        ))}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleAddQuestion(catIndex)}
-                        >
-                          + Add Question
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-
-                {categories.length === 0 && (
-                  <div className="text-center text-gray-500 py-8">
-                    No categories yet. Click "Add Category" to get started.
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-4 pt-4">
-                <Button onClick={handleSave} disabled={loading} size="lg">
-                  {loading ? "Saving..." : "Save Quiz"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleNewQuiz}
-                  disabled={loading}
-                >
-                  Cancel
-                </Button>
-              </div>
+            {/* Actions */}
+            <div className="flex gap-4 pt-8 border-t mt-8">
+              <Button onClick={handleSave} disabled={loading} size="lg">
+                {loading ? "Saving..." : "Save Quiz"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleNewQuiz}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
             </div>
           </Card>
         </div>

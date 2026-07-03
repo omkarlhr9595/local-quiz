@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import buzzerSound from "@/assets/Bell Ding Sound EFFECT.mp3";
+import type { Contestant, Game } from "@shared/types";
 
 interface ContestantPageProps {
   contestantNumber: number;
@@ -14,7 +15,7 @@ interface ContestantPageProps {
 function ContestantPage({ contestantNumber }: ContestantPageProps) {
   const route = `/contestant${contestantNumber}`;
 
-  const [contestant, setContestant] = useState<any>(null);
+  const [contestant, setContestant] = useState<Contestant | null>(null);
   const [isFirstInQueue, setIsFirstInQueue] = useState(false);
   const [isInQueue, setIsInQueue] = useState(false);
   const [buzzerDisabled, setBuzzerDisabled] = useState(false);
@@ -29,18 +30,18 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
   } = useGameStore();
 
   const { socket, connect, joinRoom } = useSocketStore();
-  
+
   // Track previous first status to detect when contestant becomes first
   const previousFirstStatusRef = useRef<boolean>(false);
-  
+
   // Create audio object for buzzer sound
   const buzzerSoundRef = useRef<HTMLAudioElement | null>(null);
-  
+
   // Initialize audio on mount
   useEffect(() => {
     buzzerSoundRef.current = new Audio(buzzerSound);
     buzzerSoundRef.current.preload = "auto";
-    
+
     return () => {
       if (buzzerSoundRef.current) {
         buzzerSoundRef.current.pause();
@@ -49,17 +50,50 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
     };
   }, []);
 
+  const loadActiveGame = useCallback(async () => {
+    try {
+      const gameResponse = await gameApi.getActive();
+      if (gameResponse.data.success) {
+        setGame(gameResponse.data.data);
+      }
+    } catch (error) {
+      console.error("Error loading active game:", error);
+    }
+  }, [setGame]);
+
+  const loadContestant = useCallback(async () => {
+    if (!game) return;
+
+    try {
+      const response = await contestantApi.getByGameId(game.id);
+      if (response.data.success) {
+        const contestants: Contestant[] = response.data.data;
+        const foundContestant = contestants.find((c) => c.route === route);
+        if (foundContestant) {
+          setContestant(foundContestant);
+        } else {
+          console.error("Contestant not found for route:", route);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading contestant:", error);
+    }
+  }, [game, route, setContestant]);
+
   // Load active game
   useEffect(() => {
     loadActiveGame();
-  }, []);
+  }, [loadActiveGame]);
 
   // Load contestant data when game is loaded
   useEffect(() => {
     if (game) {
-      loadContestant();
+      const timer = setTimeout(() => {
+        loadContestant();
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [game, route]);
+  }, [game, route, loadContestant]);
 
   // Connect to Socket.io
   useEffect(() => {
@@ -83,17 +117,21 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       question: string;
       points: number;
       category: string;
+      imageUrl?: string;
+      type?: "text" | "mcq";
+      options?: Array<{ id: string; text: string }>;
     }) => {
       setCurrentQuestion({
         question: data.question,
         points: data.points,
         category: data.category,
+        imageUrl: data.imageUrl,
+        type: data.type,
+        options: data.options,
       });
-      // Reset buzzer state when new question is revealed
       setIsFirstInQueue(false);
       setIsInQueue(false);
       setBuzzerDisabled(false);
-      // Reset previous first status so sound can play for new question
       previousFirstStatusRef.current = false;
     };
 
@@ -101,62 +139,27 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       queue: Array<{ contestantId: string; timestamp: number }>;
       currentAnswering: string | null;
     }) => {
-      console.log(`\n[CLIENT-BUZZER] ========== QUEUE UPDATE RECEIVED ==========`);
-      console.log(`[CLIENT-BUZZER] Contestant: ${contestant?.id || "unknown"} (${contestant?.name || "unknown"})`);
-      console.log(`[CLIENT-BUZZER] Queue size: ${data.queue.length}`);
-      console.log(`[CLIENT-BUZZER] Current answering: ${data.currentAnswering || "none"}`);
-      console.log(`[CLIENT-BUZZER] Queue order:`);
-      data.queue.forEach((entry, index) => {
-        const isMe = entry.contestantId === contestant?.id;
-        const marker = isMe ? " ⭐ ME" : "";
-        console.log(
-          `[CLIENT-BUZZER]   [${index + 1}]${marker} Contestant: ${entry.contestantId}, Timestamp: ${entry.timestamp} (${new Date(entry.timestamp).toISOString()})`
-        );
-      });
-
-      if (contestant) {
-        const myPosition = data.queue.findIndex((q) => q.contestantId === contestant.id);
-        const inQueue = myPosition !== -1;
-        const first = myPosition === 0;
-
-        console.log(`[CLIENT-BUZZER] My position: ${inQueue ? myPosition + 1 : "not in queue"}`);
-        console.log(`[CLIENT-BUZZER] Is first: ${first}`);
-        console.log(`[CLIENT-BUZZER] In queue: ${inQueue}`);
-      }
-
       setBuzzerQueue(data.queue, data.currentAnswering);
-      
+
       if (!contestant) {
-        console.log(`[CLIENT-BUZZER] ========== UPDATE COMPLETE (no contestant) ==========\n`);
         return;
       }
 
-      // Check if this contestant is in the queue
       const inQueue = data.queue.some((entry) => entry.contestantId === contestant.id);
       setIsInQueue(inQueue);
 
-      // Check if this contestant is first in queue
       const first = data.queue.length > 0 && data.queue[0].contestantId === contestant.id;
       setIsFirstInQueue(first);
-      
-      // Play sound if contestant just became first (wasn't first before, but is now)
+
       if (first && !previousFirstStatusRef.current && buzzerSoundRef.current) {
-        console.log(`[CLIENT-BUZZER] Contestant became first - Playing sound`);
         buzzerSoundRef.current.currentTime = 0;
         buzzerSoundRef.current.play().catch((error) => {
           console.error("Error playing buzzer sound:", error);
         });
       }
-      
-      // Update the ref to track current first status
+
       previousFirstStatusRef.current = first;
-
-      // Disable buzzer only if already in queue (not if someone else is answering)
-      // Contestants should be able to join the queue even if someone is answering
       setBuzzerDisabled(inQueue);
-
-      console.log(`[CLIENT-BUZZER] State updated: inQueue=${inQueue}, first=${first}, disabled=${inQueue}`);
-      console.log(`[CLIENT-BUZZER] ========== UPDATE COMPLETE ==========\n`);
     };
 
     const handleAnswerResult = (data: {
@@ -164,24 +167,19 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       isCorrect: boolean;
       points: number;
     }) => {
-      // Reset buzzer state after answer is evaluated
       if (data.contestantId === contestant?.id || data.isCorrect) {
         setIsFirstInQueue(false);
         setIsInQueue(false);
         setBuzzerDisabled(false);
       }
 
-      // If answer is correct, clear current question so UI shows "Waiting for question..."
       if (data.isCorrect) {
-        console.log(`[CLIENT] Answer was correct, clearing current question`);
         setCurrentQuestion(null);
       }
     };
 
     const handleScoreUpdate = (data: { contestantId: string; newScore: number }) => {
-      // Update contestant score if it's this contestant
       if (contestant && data.contestantId === contestant.id) {
-        console.log(`[CLIENT] Score update received: ${data.newScore} points for ${contestant.name}`);
         setContestant((prev) => {
           if (prev) {
             return { ...prev, score: data.newScore };
@@ -191,11 +189,8 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       }
     };
 
-    const handleGameUpdate = (data: { game: any }) => {
-      // Clear current question if game state shows no current question
-      // This handles cases like "Mark Question as Done" or when question is cleared
+    const handleGameUpdate = (data: { game: Game }) => {
       if (data.game && !data.game.currentQuestion) {
-        console.log(`[CLIENT] Game update received - no current question, clearing question state`);
         setCurrentQuestion(null);
       }
     };
@@ -215,29 +210,16 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
     };
   }, [socket, contestant, setCurrentQuestion, setBuzzerQueue]);
 
-  // Handle spacebar press for buzzer
   const handleBuzzerPress = useCallback(() => {
     if (!socket || !game || !contestant || !currentQuestion) {
-      console.log(`[CLIENT-BUZZER] ${contestant?.id || "unknown"} - Cannot buzz: missing prerequisites`);
       return;
     }
 
-    // Don't allow if already disabled or already in queue
     if (buzzerDisabled || isInQueue) {
-      console.log(`[CLIENT-BUZZER] ${contestant.id} - Cannot buzz: disabled=${buzzerDisabled}, inQueue=${isInQueue}`);
       return;
     }
 
-    // Capture timestamp IMMEDIATELY when buzzer is pressed (before any async operations)
-    // This ensures the timestamp reflects the actual moment the user pressed, not when the checks completed
     const timestamp = Date.now();
-    const requestId = `${contestant.id}-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
-
-    console.log(`\n[CLIENT-BUZZER] ========== BUZZ PRESS [${requestId}] ==========`);
-    console.log(`[CLIENT-BUZZER] Contestant: ${contestant.id} (${contestant.name})`);
-    console.log(`[CLIENT-BUZZER] Timestamp captured: ${timestamp} (${new Date(timestamp).toISOString()})`);
-    console.log(`[CLIENT-BUZZER] Game ID: ${game.id}`);
-    console.log(`[CLIENT-BUZZER] Emitting buzzer-press event...`);
 
     socket.emit("buzzer-press", {
       gameId: game.id,
@@ -245,12 +227,7 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       timestamp,
     });
 
-    console.log(`[CLIENT-BUZZER] [${requestId}] Event emitted at: ${Date.now()} (${new Date().toISOString()})`);
-
-    // Disable buzzer temporarily to prevent spam
-    // The buzzer-queue-update event will re-enable it if not in queue
     setBuzzerDisabled(true);
-    console.log(`[CLIENT-BUZZER] [${requestId}] Buzzer disabled locally\n`);
   }, [socket, game, contestant, currentQuestion, buzzerDisabled, isInQueue]);
 
   // Listen for spacebar keypress
@@ -268,38 +245,6 @@ function ContestantPage({ contestantNumber }: ContestantPageProps) {
       window.removeEventListener("keydown", handleKeyPress);
     };
   }, [currentQuestion, buzzerDisabled, handleBuzzerPress]);
-
-  const loadActiveGame = async () => {
-    try {
-      const gameResponse = await gameApi.getActive();
-      if (gameResponse.data.success) {
-        setGame(gameResponse.data.data);
-      }
-    } catch (error) {
-      console.error("Error loading active game:", error);
-    }
-  };
-
-  const loadContestant = async () => {
-    if (!game) return;
-
-    try {
-      // Load all contestants for the game
-      const response = await contestantApi.getByGameId(game.id);
-      if (response.data.success) {
-        const contestants = response.data.data;
-        // Find contestant by route
-        const foundContestant = contestants.find((c: any) => c.route === route);
-        if (foundContestant) {
-          setContestant(foundContestant);
-        } else {
-          console.error("Contestant not found for route:", route);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading contestant:", error);
-    }
-  };
 
   if (!game) {
     return (

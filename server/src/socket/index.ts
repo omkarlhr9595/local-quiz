@@ -5,7 +5,7 @@ import type {
   SocketData,
 } from "./types.js";
 import { handleJoinRoom, handleLeaveRoom } from "./handlers/room.handler.js";
-import { handleSelectQuestion, handleHostRevealQuestion } from "./handlers/question.handler.js";
+import { handleSelectQuestion, handleHostRevealQuestion, handleHostRevealMcqAnswer } from "./handlers/question.handler.js";
 import { handleBuzzerPress } from "./handlers/buzzer.handler.js";
 import { handleHostAnswerConfirm, handleHostMarkQuestionDone, handleHostManualAwardPoints } from "./handlers/answer.handler.js";
 import {
@@ -62,6 +62,16 @@ export const setupSocketIO = (io: Server) => {
         payload.categoryIndex,
         payload.questionIndex
       );
+    });
+
+    socket.on("host-reveal-mcq-answer", async (payload) => {
+      const { gameId, role } = socket.data;
+      if (!gameId || role !== "host") {
+        socket.emit("error", { message: "Only host can reveal MCQ answers" });
+        return;
+      }
+
+      await handleHostRevealMcqAnswer(socket, payload.gameId);
     });
 
     // Buzzer System

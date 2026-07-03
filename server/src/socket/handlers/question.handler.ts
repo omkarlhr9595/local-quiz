@@ -63,7 +63,6 @@ export const handleHostRevealQuestion = async (
       return;
     }
 
-    // Check if this question has already been answered
     const isAlreadyAnswered = (game.answeredQuestions || []).some(
       (aq) => aq.categoryIndex === categoryIndex && aq.questionIndex === questionIndex
     );
@@ -73,7 +72,6 @@ export const handleHostRevealQuestion = async (
       return;
     }
 
-    // Update game state
     await gameService.updateGame(gameId, {
       currentQuestion: {
         categoryIndex,
@@ -81,24 +79,34 @@ export const handleHostRevealQuestion = async (
         points: question.points,
         question: question.question,
         answer: question.answer,
+        imageUrl: question.imageUrl,
+        type: question.type,
+        options: question.options,
+        correctOptionId: question.correctOptionId,
       },
-      buzzerQueue: [], // Reset buzzer queue for new question
+      buzzerQueue: [],
       status: "active",
     });
 
-    // Broadcast to all in room
-    socket.to(gameId).emit("question-revealed", {
+    // Build public payload (no correctOptionId leak)
+    const publicPayload = {
       question: question.question,
       points: question.points,
       category: category.name,
-    });
-    socket.emit("question-revealed", {
-      question: question.question,
-      points: question.points,
-      category: category.name,
-    });
+      imageUrl: question.imageUrl,
+      type: question.type,
+      options: question.options, // id+text only, no correctness
+    };
 
-    // Broadcast buzzer queue reset to all clients
+    // Build host payload (includes correctOptionId for host-only view)
+    const hostPayload = {
+      ...publicPayload,
+      correctOptionId: question.correctOptionId,
+    };
+
+    socket.to(gameId).emit("question-revealed", publicPayload);
+    socket.emit("question-revealed", hostPayload);
+
     socket.to(gameId).emit("buzzer-queue-update", {
       queue: [],
       currentAnswering: null,
@@ -107,13 +115,36 @@ export const handleHostRevealQuestion = async (
       queue: [],
       currentAnswering: null,
     });
-
-    console.log(
-      `📢 Host revealed question: ${category.name} - ${question.points} points`
-    );
   } catch (error) {
     console.error("Error revealing question:", error);
     socket.emit("error", { message: "Failed to reveal question" });
   }
 };
 
+export const handleHostRevealMcqAnswer = async (
+  socket: Socket<never, ServerToClientEvents>,
+  gameId: string
+) => {
+  try {
+    const game = await gameService.getGameById(gameId);
+    if (!game) {
+      socket.emit("error", { message: "Game not found" });
+      return;
+    }
+
+    if (!game.currentQuestion || !game.currentQuestion.correctOptionId) {
+      socket.emit("error", { message: "No MCQ question currently revealed" });
+      return;
+    }
+
+    socket.to(gameId).emit("mcq-answer-revealed", {
+      correctOptionId: game.currentQuestion.correctOptionId,
+    });
+    socket.emit("mcq-answer-revealed", {
+      correctOptionId: game.currentQuestion.correctOptionId,
+    });
+  } catch (error) {
+    console.error("Error revealing MCQ answer:", error);
+    socket.emit("error", { message: "Failed to reveal MCQ answer" });
+  }
+};
