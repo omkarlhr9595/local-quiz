@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import type { Question, QuestionType, QuestionOption } from "../../../../shared/
 interface QuestionEditorDialogProps {
   isOpen: boolean;
   question?: Question;
+  questionIndex?: number | null;
   onSave: (question: Question) => void;
   onClose: () => void;
 }
@@ -24,14 +25,42 @@ const DEFAULT_QUESTION: Question = {
   options: [],
 };
 
+const getDefaultPoints = (questionIndex: number | null | undefined): number => {
+  if (questionIndex === null || questionIndex === undefined) {
+    return 100;
+  }
+  // Points scale: 1st=100, 2nd=200, 3rd=300, 4th=400, 5th=500
+  return Math.min((questionIndex + 1) * 100, 500);
+};
+
 export const QuestionEditorDialog = ({
   isOpen,
   question: initialQuestion,
+  questionIndex,
   onSave,
   onClose,
 }: QuestionEditorDialogProps) => {
-  const [question, setQuestion] = useState<Question>(initialQuestion || DEFAULT_QUESTION);
+  const getInitialQuestion = (): Question => {
+    if (initialQuestion) {
+      return initialQuestion;
+    }
+    // When adding a new question, use index-based default points
+    const defaultPoints = getDefaultPoints(questionIndex);
+    return { ...DEFAULT_QUESTION, points: defaultPoints };
+  };
+
+  const [question, setQuestion] = useState<Question>(getInitialQuestion());
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (isOpen) {
+      // Defer state update to prevent cascading renders
+      setTimeout(() => {
+        setQuestion(getInitialQuestion());
+        setErrors({});
+      }, 0);
+    }
+  }, [isOpen, initialQuestion, questionIndex]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};

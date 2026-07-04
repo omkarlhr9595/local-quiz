@@ -31,7 +31,10 @@ export const CategoryEditor = ({
     onUpdate({ ...category, name });
   };
 
+  const [newQuestionIndex, setNewQuestionIndex] = useState<number | null>(null);
+
   const handleAddQuestion = () => {
+    setNewQuestionIndex(category.questions.length);
     setSelectedQuestion(undefined);
     setIsAddingQuestion(true);
     setIsEditingQuestion(true);
@@ -140,8 +143,12 @@ export const CategoryEditor = ({
       <QuestionEditorDialog
         isOpen={isEditingQuestion}
         question={selectedQuestion}
+        questionIndex={newQuestionIndex}
         onSave={handleSaveQuestion}
-        onClose={() => setIsEditingQuestion(false)}
+        onClose={() => {
+          setIsEditingQuestion(false);
+          setNewQuestionIndex(null);
+        }}
       />
     </Card>
   );
